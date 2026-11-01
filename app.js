@@ -13,6 +13,8 @@ const GROUPS = [
   { key: 'ladies-doubles', label: 'Ladies doubles', gender: 'ladies', format: 'doubles' },
 ];
 
+const VIEWS = ['standings', 'weekly', 'fixtures'];
+
 const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
 
 const state = { model: null, slug: null, view: 'standings', openTeam: null, fetchedAt: null };
@@ -135,8 +137,39 @@ function buildModel(rows) {
     d.fixtures.sort((x, y) => (x.date ?? 0) - (y.date ?? 0) || x.id.localeCompare(y.id));
     d.table = [...d.teams.values()].sort((x, y) =>
       y.Pts - x.Pts || (y.SF - y.SA) - (x.SF - x.SA) || y.SF - x.SF || x.team.localeCompare(y.team));
+    d.abbr = abbreviations([...d.teams.keys()]);
   }
   return divisions;
+}
+
+function splitTeam(name) {
+  const m = /^(.*\S)\s+([LM][SD][A-Z])$/.exec(name);
+  return m ? { club: m[1], code: m[2] } : { club: name, code: '' };
+}
+
+// Short club codes for one division: "Claremont" -> CLA, "Fish Hoek" -> FH, "CPUT" -> CPUT.
+// Clubs with two teams in the same division get the team letter added ("PLU B").
+function abbreviations(teams) {
+  const short = (club, len) => {
+    const words = club.split(' ');
+    if (words.length > 1) return words.map((w) => w[0]).join('').toUpperCase();
+    return /^[A-Z]{2,5}$/.test(club) ? club : club.slice(0, len).toUpperCase();
+  };
+  const clubs = new Map();
+  for (const t of teams) {
+    const { club } = splitTeam(t);
+    clubs.set(club, (clubs.get(club) ?? 0) + 1);
+  }
+  const base = new Map();
+  for (const club of clubs.keys()) {
+    let len = 3, code = short(club, len);
+    while ([...base.values()].includes(code) && len < club.length) code = short(club, ++len);
+    base.set(club, code);
+  }
+  return new Map(teams.map((t) => {
+    const { club, code } = splitTeam(t);
+    return [t, clubs.get(club) > 1 && code ? `${base.get(club)} ${code.slice(-1)}` : base.get(club)];
+  }));
 }
 
 function tally(t, sf, sa, pts, res) {
@@ -155,10 +188,8 @@ function esc(s) {
 
 // "Claremont LDA" -> "Claremont" + muted "LDA"
 function teamLabel(name) {
-  const m = /^(.*\S)\s+([LM][SD][A-Z])$/.exec(name);
-  return m
-    ? `<span class="team-name">${esc(m[1])}</span><span class="code">${esc(m[2])}</span>`
-    : `<span class="team-name">${esc(name)}</span>`;
+  const { club, code } = splitTeam(name);
+  return `<span class="team-name">${esc(club)}</span>${code ? `<span class="code">${esc(code)}</span>` : ''}`;
 }
 
 function fmtDate(d, long) {
@@ -202,7 +233,9 @@ function renderPanel() {
   for (const b of document.querySelectorAll('.toggle button')) {
     b.setAttribute('aria-selected', String(b.dataset.view === state.view));
   }
-  $('content').innerHTML = state.view === 'fixtures' ? fixturesHTML(d) : standingsHTML(d);
+  $('content').innerHTML = state.view === 'fixtures' ? fixturesHTML(d)
+    : state.view === 'weekly' ? weeklyHTML(d)
+    : standingsHTML(d);
 }
 
 function standingsHTML(d) {
@@ -262,6 +295,55 @@ function teamFixturesHTML(d, team) {
       </li>`;
   });
   return `<ul class="tf-list">${items.join('') || '<li class="tf">No fixtures.</li>'}</ul>`;
+}
+
+// Standings rows with one column per round: opponent code + match score, coloured by result.
+function weeklyHTML(d) {
+  if (!d.table.length) return '<p class="empty">No teams yet.</p>';
+  const weeks = [...new Map(d.fixtures.map((f) => [f.date ? f.date.getTime() : 'tbc', f.date])).entries()];
+  const head = weeks.map(([, date]) => `<th class="wk-head">${date ? fmtDate(date) : 'TBC'}</th>`).join('');
+
+  const rows = d.table.map((t, i) => {
+    const cells = weeks.map(([key]) => {
+      const fx = d.fixtures.filter((f) => (f.date ? f.date.getTime() : 'tbc') === key && (f.home === t.team || f.away === t.team));
+      return `<td class="wk">${fx.map((f) => weekCellHTML(d, f, t.team)).join('')}</td>`;
+    }).join('');
+    return `
+      <tr>
+        <td class="team"><span class="pos">${i + 1}</span><button type="button" class="fx-team" data-team="${esc(t.team)}">${teamLabel(t.team)}</button></td>
+        ${cells}
+        <td class="pts">${t.Pts}</td>
+      </tr>`;
+  }).join('');
+
+  return `
+    <div class="scroll">
+      <table class="weekly">
+        <thead><tr><th class="team"><span class="pos">#</span>Team</th>${head}<th title="League points">Pts</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <p class="hint">Each week shows the opponent and match score. Tap a team for full results.</p>`;
+}
+
+function weekCellHTML(d, f, team) {
+  const isHome = f.home === team;
+  const opp = isHome ? f.away : f.home;
+  const code = esc(d.abbr.get(opp) ?? opp);
+  const where = isHome ? 'home' : 'away';
+  if (!f.played) {
+    const pp = /postpon/i.test(f.status);
+    const pending = !pp && f.date && f.date < today();
+    const label = pp ? 'PP' : pending ? '?' : '';
+    const tip = `${pp ? 'Postponed' : pending ? 'Result pending' : 'Upcoming'}: v ${opp} (${where})`;
+    return `<span class="chip up" title="${esc(tip)}"><b>${code}</b><span>${label || '&nbsp;'}</span></span>`;
+  }
+  const [m1, m2, s1, s2, p] = isHome
+    ? [f.homeMatches, f.awayMatches, f.homeSets, f.awaySets, f.homePts]
+    : [f.awayMatches, f.homeMatches, f.awaySets, f.homeSets, f.awayPts];
+  const res = f.result === 'D' ? 'D' : (f.result === 'H') === isHome ? 'W' : 'L';
+  const tip = `${{ W: 'Won', D: 'Drew', L: 'Lost' }[res]} v ${opp} (${where}) · ${m1 ?? '–'}–${m2 ?? '–'} · sets ${s1 ?? 0}–${s2 ?? 0} · ${p} pts`;
+  return `<span class="chip ${res}" title="${esc(tip)}"><b>${code}</b><span>${m1 ?? '–'}–${m2 ?? '–'}</span></span>`;
 }
 
 function fixturesHTML(d) {
@@ -330,11 +412,11 @@ function defaultSlug() {
 
 function readHash() {
   const [slug, view] = location.hash.replace(/^#\/?/, '').split('/');
-  return { slug: slug || null, view: view === 'fixtures' ? 'fixtures' : 'standings' };
+  return { slug: slug || null, view: VIEWS.includes(view) ? view : 'standings' };
 }
 
 function writeHash() {
-  const hash = `#/${state.slug}${state.view === 'fixtures' ? '/fixtures' : ''}`;
+  const hash = `#/${state.slug}${state.view === 'standings' ? '' : `/${state.view}`}`;
   if (location.hash !== hash) history.replaceState(null, '', hash);
 }
 

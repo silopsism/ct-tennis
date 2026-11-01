@@ -208,10 +208,15 @@ h2 {
   border: 1px solid var(--line);
 }
 
+@media (max-width: 560px) {
+  .panel-head { flex-wrap: wrap; }
+}
+
 .toggle button {
   border: 0;
   background: none;
   padding: 5px 12px;
+  white-space: nowrap;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
@@ -390,6 +395,89 @@ h2 {
 }
 
 .tag.alert { color: var(--loss); border-color: currentColor; }
+
+/* By-week view */
+
+.scroll { overflow-x: auto; }
+
+.weekly {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.weekly th,
+.weekly td {
+  padding: 6px 3px;
+  text-align: center;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--line);
+}
+
+.weekly thead th {
+  padding: 10px 3px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--faint);
+}
+
+.weekly tbody tr:last-child td { border-bottom: 0; }
+
+.weekly th:first-child,
+.weekly td:first-child { padding-left: 16px; }
+
+.weekly th:last-child,
+.weekly td:last-child { padding-right: 16px; }
+
+.weekly .team {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+  text-align: left;
+  padding-right: 10px;
+  box-shadow: inset -1px 0 0 var(--line);
+}
+
+.weekly .pos {
+  display: inline-block;
+  width: 24px;
+}
+
+.weekly .fx-team { text-align: left; }
+
+.wk { width: 58px; }
+
+.chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 52px;
+  padding: 4px 4px 3px;
+  border-radius: 7px;
+  line-height: 1.2;
+  cursor: default;
+}
+
+.chip + .chip { margin-top: 4px; }
+
+.chip b { font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+
+.chip span { font-size: 13px; font-weight: 600; }
+
+.chip.W { background: var(--win-soft); color: var(--win); }
+.chip.D { background: var(--draw-soft); color: var(--draw); }
+.chip.L { background: var(--loss-soft); color: var(--loss); }
+
+.chip.up {
+  color: var(--faint);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+@media (max-width: 560px) {
+  .weekly .code { display: none; }
+  .weekly .pos { width: 20px; }
+}
 
 /* Fixtures view */
 
