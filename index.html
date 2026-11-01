@@ -3,14 +3,38 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CPT Tennis League 2026</title>
-  <meta name="description" content="Live standings and fixture results for the 2026 CPT Tennis League.">
+  <title>Cape Town Tennis League 2026</title>
+  <meta name="description" content="Live standings and fixture results for the 2026 Cape Town Tennis League.">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="site-header">
-    <div class="wrap">
-      <h1>CPT Tennis League <span class="season">2026</span></h1>
+  <header class="hero">
+    <!-- Top-down hard court, drawn to scale in centimetres (23.77 m × 10.97 m) with run-off around it. -->
+    <svg class="court" viewBox="-400 -468 3177 1617" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <rect x="-400" y="-468" width="3177" height="1617" class="runoff"/>
+      <rect x="0" y="0" width="2377" height="1097" class="surface"/>
+    </svg>
+    <!-- Lines on their own layer so they can fade out behind the title. -->
+    <svg class="court court-lines" viewBox="-400 -468 3177 1617" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <g class="lines">
+        <rect x="0" y="0" width="2377" height="1097"/>
+        <path d="M0 137H2377M0 960H2377"/>
+        <path d="M548.5 137V960M1828.5 137V960M548.5 548.5H1828.5"/>
+        <path d="M0 548.5H20M2357 548.5H2377"/>
+      </g>
+      <path class="net" d="M1188.5 -91V1188"/>
+      <circle class="post" cx="1188.5" cy="-91" r="9"/>
+      <circle class="post" cx="1188.5" cy="1188" r="9"/>
+    </svg>
+    <div class="wrap hero-inner">
+      <p class="eyebrow">2026 season</p>
+      <h1>
+        <svg class="ball" viewBox="0 0 32 32" aria-hidden="true">
+          <circle cx="16" cy="16" r="15"/>
+          <path d="M4.5 6.5c6 4 6 15 0 19M27.5 6.5c-6 4-6 15 0 19"/>
+        </svg>
+        Cape Town Tennis League
+      </h1>
       <p class="status" id="status" aria-live="polite">Loading results…</p>
     </div>
   </header>

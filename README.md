@@ -1,4 +1,4 @@
-# CPT Tennis League 2026
+# Cape Town Tennis League 2026
 
 Live standings and fixture results, read straight from the **Results Entry** tab of the league's Google Sheet each time the page loads (and every 5 minutes while open).
 
