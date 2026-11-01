@@ -21,10 +21,23 @@
     <section class="panel" id="panel" hidden>
       <div class="panel-head">
         <h2 id="division-title"></h2>
-        <div class="toggle" role="tablist" aria-label="View">
-          <button type="button" role="tab" data-view="standings">Standings</button>
-          <button type="button" role="tab" data-view="weekly">By week</button>
-          <button type="button" role="tab" data-view="fixtures">Fixtures</button>
+        <div class="tools">
+          <div class="toggle" role="tablist" aria-label="View">
+            <button type="button" role="tab" data-view="standings">Standings</button>
+            <button type="button" role="tab" data-view="weekly">By week</button>
+            <button type="button" role="tab" data-view="fixtures">Fixtures</button>
+          </div>
+          <button type="button" class="wand" id="wand" aria-pressed="false" hidden
+            aria-label="Project the rest of the season" title="Project the rest of the season">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 20 14.5 9.5"/>
+              <path d="m14.5 9.5 2.5-2.5" stroke-width="3.2"/>
+              <path d="M18 2.5v3M16.5 4h3"/>
+              <path d="M20.5 10v2M19.5 11h2"/>
+              <path d="M10 3v2M9 4h2"/>
+            </svg>
+          </button>
         </div>
       </div>
       <div id="content"></div>

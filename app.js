@@ -17,7 +17,7 @@ const VIEWS = ['standings', 'weekly', 'fixtures'];
 
 const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
 
-const state = { model: null, slug: null, view: 'standings', openTeam: null, fetchedAt: null };
+const state = { model: null, slug: null, view: 'standings', project: false, openTeam: null, fetchedAt: null };
 
 const $ = (id) => document.getElementById(id);
 
@@ -108,6 +108,7 @@ function buildModel(rows) {
       awayPts: num(r['Away Final Pts']),
       status: clean(r['Status']),
       notes: clean(r['Notes']),
+      doubles: /doubles/i.test(clean(r['Format']) || division),
     };
     // Status isn't always kept up to date, so a fixture counts as played once scores are in.
     f.played = (f.homeMatches !== null && f.awayMatches !== null) || (f.homePts !== null && f.awayPts !== null);
@@ -135,11 +136,20 @@ function buildModel(rows) {
 
   for (const d of divisions.values()) {
     d.fixtures.sort((x, y) => (x.date ?? 0) - (y.date ?? 0) || x.id.localeCompare(y.id));
-    d.table = [...d.teams.values()].sort((x, y) =>
-      y.Pts - x.Pts || (y.SF - y.SA) - (x.SF - x.SA) || y.SF - x.SF || x.team.localeCompare(y.team));
+    d.table = [...d.teams.values()].sort(byStanding);
     d.abbr = abbreviations([...d.teams.keys()]);
   }
+  const edge = homeEdge([...divisions.values()].flatMap((d) => d.fixtures));
+  for (const d of divisions.values()) d.homeEdge = edge;
   return divisions;
+}
+
+function byStanding(x, y) {
+  return y.Pts - x.Pts || (y.SF - y.SA) - (x.SF - x.SA) || y.SF - x.SF || x.team.localeCompare(y.team);
+}
+
+function isDefault(f) {
+  return /default/i.test(f.status) || /default/i.test(f.notes);
 }
 
 function splitTeam(name) {
@@ -178,6 +188,116 @@ function tally(t, sf, sa, pts, res) {
   t.SF += sf ?? 0;
   t.SA += sa ?? 0;
   t.Pts += pts ?? 0;
+}
+
+// ---------- Projection ----------
+
+// Scoring Rules tab: 1 point per set, plus a win bonus (singles 4, doubles 3) or 1 each for a draw.
+const WIN_BONUS = { singles: 4, doubles: 3 };
+const DRAW_BONUS = 1;
+const PRIOR_SETS = 2; // each team starts as if it had split 2–2 in sets with an average side
+
+const sigmoid = (x) => 1 / (1 + Math.exp(-x));
+
+const isRated = (f) => f.played && !isDefault(f) && (f.homeSets ?? 0) + (f.awaySets ?? 0) > 0;
+
+// Home advantage in log-odds of winning a set, measured across every league's results.
+function homeEdge(fixtures) {
+  let home = 1, away = 1;
+  for (const f of fixtures) {
+    if (!isRated(f)) continue;
+    home += f.homeSets;
+    away += f.awaySets;
+  }
+  return Math.log(home / away);
+}
+
+// Bradley–Terry strength from sets won, so beating strong sides counts for more. Defaults are ignored.
+function ratings(d) {
+  const r = new Map([...d.teams.keys()].map((t) => [t, 0]));
+  const games = d.fixtures.filter(isRated);
+  const edge = d.homeEdge ?? 0;
+  for (let iter = 0; iter < 60; iter++) {
+    for (const t of r.keys()) {
+      const p0 = sigmoid(r.get(t));
+      let grad = PRIOR_SETS - 2 * PRIOR_SETS * p0;
+      let hess = 2 * PRIOR_SETS * p0 * (1 - p0);
+      for (const f of games) {
+        if (f.home !== t && f.away !== t) continue;
+        const isHome = f.home === t;
+        const won = isHome ? f.homeSets : f.awaySets;
+        const n = f.homeSets + f.awaySets;
+        const p = sigmoid(r.get(t) - r.get(isHome ? f.away : f.home) + (isHome ? edge : -edge));
+        grad += won - n * p;
+        hess += n * p * (1 - p);
+      }
+      r.set(t, r.get(t) + grad / hess);
+    }
+  }
+  return r;
+}
+
+// Matches per fixture: whatever played fixtures in this division usually have (6 singles / 4 doubles).
+function matchesPerFixture(d) {
+  const counts = new Map();
+  for (const f of d.fixtures) {
+    if (!f.played || isDefault(f)) continue;
+    const n = (f.homeMatches ?? 0) + (f.awayMatches ?? 0);
+    if (n > 0) counts.set(n, (counts.get(n) ?? 0) + 1);
+  }
+  const best = [...counts].sort((a, b) => b[1] - a[1])[0];
+  return best ? best[0] : d.fixtures[0]?.doubles ? 4 : 6;
+}
+
+function binomial(n, k, p) {
+  let c = 1;
+  for (let i = 0; i < k; i++) c = (c * (n - i)) / (i + 1);
+  return c * p ** k * (1 - p) ** (n - k);
+}
+
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+// Most likely scoreline for an unplayed fixture. Each match is best of three sets.
+function projectFixture(f, r, n, edge = 0) {
+  const p = sigmoid(r.get(f.home) - r.get(f.away) + edge);
+  const pm = p * p * (3 - 2 * p);
+  const homeMatches = Math.round(n * pm);
+  const awayMatches = n - homeMatches;
+  const homeSetsPerMatch = 2 * pm + 2 * p * (1 - p) ** 2;
+  const awaySetsPerMatch = 2 * (1 - pm) + 2 * p * p * (1 - p);
+  const homeSets = clamp(Math.round(n * homeSetsPerMatch), 2 * homeMatches, 2 * homeMatches + awayMatches);
+  const awaySets = clamp(Math.round(n * awaySetsPerMatch), 2 * awayMatches, 2 * awayMatches + homeMatches);
+
+  let homeWinChance = 0;
+  for (let k = 0; k <= n; k++) {
+    const pk = binomial(n, k, pm);
+    homeWinChance += 2 * k > n ? pk : 2 * k === n ? pk / 2 : 0;
+  }
+
+  const pf = { ...f, homeMatches, awayMatches, homeSets, awaySets, played: true, projected: true, homeWinChance };
+  pf.result = outcome(pf);
+  const bonus = WIN_BONUS[f.doubles ? 'doubles' : 'singles'];
+  pf.homePts = homeSets + (pf.result === 'H' ? bonus : pf.result === 'D' ? DRAW_BONUS : 0);
+  pf.awayPts = awaySets + (pf.result === 'A' ? bonus : pf.result === 'D' ? DRAW_BONUS : 0);
+  return pf;
+}
+
+// Played results plus projected ones for everything left; cached per division until the next data load.
+function projection(d) {
+  if (d.projection) return d.projection;
+  const r = ratings(d);
+  const n = matchesPerFixture(d);
+  const fixtures = new Map();
+  const teams = new Map([...d.teams.values()].map((t) => [t.team, { ...t }]));
+  for (const f of d.fixtures) {
+    if (f.played) continue;
+    const pf = projectFixture(f, r, n, d.homeEdge);
+    fixtures.set(f.id, pf);
+    tally(teams.get(f.home), pf.homeSets, pf.awaySets, pf.homePts, pf.result === 'H' ? 'W' : pf.result === 'A' ? 'L' : 'D');
+    tally(teams.get(f.away), pf.awaySets, pf.homeSets, pf.awayPts, pf.result === 'A' ? 'W' : pf.result === 'H' ? 'L' : 'D');
+  }
+  d.projection = { fixtures, table: [...teams.values()].sort(byStanding) };
+  return d.projection;
 }
 
 // ---------- Rendering ----------
@@ -233,6 +353,8 @@ function renderPanel() {
   for (const b of document.querySelectorAll('.toggle button')) {
     b.setAttribute('aria-selected', String(b.dataset.view === state.view));
   }
+  $('wand').hidden = state.view !== 'weekly';
+  $('wand').setAttribute('aria-pressed', String(state.project));
   $('content').innerHTML = state.view === 'fixtures' ? fixturesHTML(d)
     : state.view === 'weekly' ? weeklyHTML(d)
     : standingsHTML(d);
@@ -280,7 +402,7 @@ function teamFixturesHTML(d, team) {
       const res = f.result === 'D' ? 'D' : (f.result === 'H') === isHome ? 'W' : 'L';
       score = `${m1 ?? '–'}–${m2 ?? '–'}`;
       sub = `sets ${s1 ?? 0}–${s2 ?? 0} · ${p} pts`;
-      if (/default/i.test(f.status) || /default/i.test(f.notes)) sub += ' <span class="tag alert">Default</span>';
+      if (isDefault(f)) sub += ' <span class="tag alert">Default</span>';
       mark = `<span class="pill ${res}" title="${{ W: 'Won', D: 'Drew', L: 'Lost' }[res]}">${res}</span>`;
     } else {
       score = pendingTag(f);
@@ -298,32 +420,53 @@ function teamFixturesHTML(d, team) {
 }
 
 // Standings rows with one column per round: opponent code + match score, coloured by result.
+// With the projection on, unplayed fixtures get a predicted score and rows are ordered by projected finish.
 function weeklyHTML(d) {
   if (!d.table.length) return '<p class="empty">No teams yet.</p>';
+  const proj = state.project ? projection(d) : null;
   const weeks = [...new Map(d.fixtures.map((f) => [f.date ? f.date.getTime() : 'tbc', f.date])).entries()];
   const head = weeks.map(([, date]) => `<th class="wk-head">${date ? fmtDate(date) : 'TBC'}</th>`).join('');
+  const nowPos = new Map(d.table.map((t, i) => [t.team, i + 1]));
 
-  const rows = d.table.map((t, i) => {
+  const rows = (proj ? proj.table : d.table).map((t, i) => {
     const cells = weeks.map(([key]) => {
       const fx = d.fixtures.filter((f) => (f.date ? f.date.getTime() : 'tbc') === key && (f.home === t.team || f.away === t.team));
-      return `<td class="wk">${fx.map((f) => weekCellHTML(d, f, t.team)).join('')}</td>`;
+      return `<td class="wk">${fx.map((f) => weekCellHTML(d, proj?.fixtures.get(f.id) ?? f, t.team)).join('')}</td>`;
     }).join('');
+    const move = proj ? nowPos.get(t.team) - (i + 1) : 0;
+    const moveTag = move
+      ? `<span class="move ${move > 0 ? 'up' : 'down'}" title="${move > 0 ? 'Up' : 'Down'} ${Math.abs(move)} from ${ordinal(nowPos.get(t.team))} now">${move > 0 ? '▲' : '▼'}${Math.abs(move)}</span>`
+      : '';
     return `
       <tr>
-        <td class="team"><span class="pos">${i + 1}</span><button type="button" class="fx-team" data-team="${esc(t.team)}">${teamLabel(t.team)}</button></td>
+        <td class="team"><span class="pos">${i + 1}${moveTag}</span><button type="button" class="fx-team" data-team="${esc(t.team)}">${teamLabel(t.team)}</button></td>
         ${cells}
-        <td class="pts">${t.Pts}</td>
+        <td class="${proj ? 'now-pts' : 'pts'}">${d.teams.get(t.team).Pts}</td>
+        ${proj ? `<td class="pts proj-pts">${t.Pts}</td>` : ''}
       </tr>`;
   }).join('');
 
+  const hint = proj
+    ? `Dashed tiles are projected. Each team is rated on sets won so far, weighted by how strong its opponents were (walkovers left out), with a small home advantage. Every remaining fixture gets its most likely score. Ranked by projected finish. Hover a tile for the win chance.`
+    : 'Each week shows the opponent and match score. Tap a team for full results, or the wand to project the rest of the season.';
+
   return `
-    <div class="scroll">
+    <div class="scroll${proj ? ' projecting' : ''}">
       <table class="weekly">
-        <thead><tr><th class="team"><span class="pos">#</span>Team</th>${head}<th title="League points">Pts</th></tr></thead>
+        <thead><tr>
+          <th class="team"><span class="pos">#</span>Team</th>${head}
+          <th title="League points so far">Pts</th>
+          ${proj ? '<th class="proj-pts" title="Projected final league points">Proj</th>' : ''}
+        </tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
-    <p class="hint">Each week shows the opponent and match score. Tap a team for full results.</p>`;
+    <p class="hint">${hint}</p>`;
+}
+
+function ordinal(n) {
+  const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
 function weekCellHTML(d, f, team) {
@@ -331,6 +474,15 @@ function weekCellHTML(d, f, team) {
   const opp = isHome ? f.away : f.home;
   const code = esc(d.abbr.get(opp) ?? opp);
   const where = isHome ? 'home' : 'away';
+  if (f.projected) {
+    const [m1, m2, s1, s2, p] = isHome
+      ? [f.homeMatches, f.awayMatches, f.homeSets, f.awaySets, f.homePts]
+      : [f.awayMatches, f.homeMatches, f.awaySets, f.homeSets, f.awayPts];
+    const res = f.result === 'D' ? 'D' : (f.result === 'H') === isHome ? 'W' : 'L';
+    const chance = Math.round(100 * (isHome ? f.homeWinChance : 1 - f.homeWinChance));
+    const tip = `Projected ${{ W: 'win', D: 'draw', L: 'loss' }[res]} v ${opp} (${where}) · ${m1}–${m2} · sets ${s1}–${s2} · ${p} pts · ${chance}% chance of winning`;
+    return `<span class="chip proj ${res}" title="${esc(tip)}"><b>${code}</b><span>${m1}–${m2}</span></span>`;
+  }
   if (!f.played) {
     const pp = /postpon/i.test(f.status);
     const pending = !pp && f.date && f.date < today();
@@ -371,7 +523,7 @@ function fixtureHTML(f) {
   } else {
     mid = `<div class="fx-vs">vs</div>${pendingTag(f)}`;
   }
-  const defaulted = f.played && (/default/i.test(f.status) || /default/i.test(f.notes));
+  const defaulted = f.played && isDefault(f);
   const note = [defaulted ? '<span class="tag alert">Default</span>' : '', f.notes ? esc(f.notes) : '']
     .filter(Boolean).join(' ');
   return `
@@ -411,12 +563,13 @@ function defaultSlug() {
 }
 
 function readHash() {
-  const [slug, view] = location.hash.replace(/^#\/?/, '').split('/');
-  return { slug: slug || null, view: VIEWS.includes(view) ? view : 'standings' };
+  const [slug, view, extra] = location.hash.replace(/^#\/?/, '').split('/');
+  return { slug: slug || null, view: VIEWS.includes(view) ? view : 'standings', project: extra === 'projected' };
 }
 
 function writeHash() {
-  const hash = `#/${state.slug}${state.view === 'standings' ? '' : `/${state.view}`}`;
+  const view = state.view === 'standings' ? '' : `/${state.view}`;
+  const hash = `#/${state.slug}${view}${state.view === 'weekly' && state.project ? '/projected' : ''}`;
   if (location.hash !== hash) history.replaceState(null, '', hash);
 }
 
@@ -426,6 +579,7 @@ function applyHash() {
   if (h.slug !== state.slug) state.openTeam = null;
   state.slug = state.model.has(h.slug) ? h.slug : defaultSlug();
   state.view = h.view;
+  if (h.view === 'weekly') state.project = h.project;
   writeHash();
   render();
 }
@@ -488,6 +642,12 @@ document.addEventListener('click', (e) => {
 
   const tab = e.target.closest('.toggle button');
   if (tab) return select(state.slug, tab.dataset.view);
+
+  if (e.target.closest('#wand')) {
+    state.project = !state.project;
+    writeHash();
+    return renderPanel();
+  }
 
   const fxTeam = e.target.closest('.fx-team');
   if (fxTeam) {
