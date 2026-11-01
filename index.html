@@ -50,22 +50,22 @@
       <p class="ed-sub" id="ed-sub"></p>
 
       <div class="ed-teams">
-        <span id="ed-home"></span>
+        <span id="ed-left"></span>
         <span class="ed-v">v</span>
-        <span id="ed-away"></span>
+        <span id="ed-right"></span>
       </div>
 
       <fieldset>
-        <legend>Matches</legend>
+        <legend>Matches won <span class="ed-order" id="ed-m-order"></span></legend>
         <div class="ed-matches" id="ed-matches"></div>
       </fieldset>
 
       <fieldset>
-        <legend>Sets</legend>
+        <legend>Sets won</legend>
         <div class="ed-sets">
-          <input id="ed-hs" type="number" inputmode="numeric" min="0" aria-label="Home sets won">
-          <span>–</span>
-          <input id="ed-as" type="number" inputmode="numeric" min="0" aria-label="Away sets won">
+          <label><input id="ed-ls" type="number" inputmode="numeric" min="0"><span id="ed-ls-name"></span></label>
+          <span class="ed-dash">–</span>
+          <label><input id="ed-rs" type="number" inputmode="numeric" min="0"><span id="ed-rs-name"></span></label>
         </div>
         <p class="ed-warn" id="ed-warn" hidden></p>
       </fieldset>
@@ -77,7 +77,7 @@
         <button type="button" class="ed-remove" id="ed-remove">Remove my score</button>
         <span class="ed-spacer"></span>
         <button type="button" class="ed-btn" id="ed-cancel">Cancel</button>
-        <button type="submit" class="ed-btn primary">Save</button>
+        <button type="submit" class="ed-btn primary" id="ed-save">Save</button>
       </div>
     </form>
   </dialog>
