@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CPT Tennis League 2026</title>
+  <meta name="description" content="Live standings and fixture results for the 2026 CPT Tennis League.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <h1>CPT Tennis League <span class="season">2026</span></h1>
+      <p class="status" id="status" aria-live="polite">Loading results…</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <nav class="divisions" id="divisions" aria-label="Choose a league"></nav>
+
+    <section class="panel" id="panel" hidden>
+      <div class="panel-head">
+        <h2 id="division-title"></h2>
+        <div class="toggle" role="tablist" aria-label="View">
+          <button type="button" role="tab" data-view="standings">Standings</button>
+          <button type="button" role="tab" data-view="fixtures">Fixtures</button>
+        </div>
+      </div>
+      <div id="content"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
