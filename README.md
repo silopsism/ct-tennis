@@ -9,4 +9,9 @@ Live standings and fixture results, read straight from the **Results Entry** tab
 - By week view: score shown as matches, sets or points; the wand projects the rest of the season (Bradley–Terry on sets won, walkovers excluded, home edge measured from all results).
 - Tapping an upcoming or projected tile lets a viewer enter their own score. It is stored only in that browser (`localStorage`), counts in the standings and projection, and is dropped automatically once the official result is in the sheet.
 
+## Hosting
+
+- https://ctt.salwood.co.za — Coolify app (build pack `dockerfile`: nginx serving the three files), behind the Cloudflare Tunnel route `ctt.salwood.co.za` → `http://192.168.3.60:80`. To update: push to `main`, then Redeploy in Coolify.
+- https://silopsism.github.io/ct-tennis/ — GitHub Pages, updates automatically on push.
+
 Run locally with `python -m http.server` and open http://localhost:8000.
