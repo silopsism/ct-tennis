@@ -615,10 +615,10 @@ function openEditor(id, team) {
   const flip = team === f.away;
   Object.assign(editor, { f, n, flip, lm: null, ls: 0, rs: 0 });
   if (f.local) {
-    // Reopen your saved score as it was.
-    editor.lm = flip ? f.awayMatches : f.homeMatches;
-    editor.ls = flip ? f.awaySets : f.homeSets;
-    editor.rs = flip ? f.homeSets : f.awaySets;
+    // Reopen your saved score as it was (pulled into range if it was saved by an older version).
+    editor.lm = clamp(flip ? f.awayMatches : f.homeMatches, 0, n);
+    editor.ls = clamp(flip ? f.awaySets : f.homeSets, ...setsRange(editor.lm, n - editor.lm));
+    editor.rs = clamp(flip ? f.homeSets : f.awaySets, ...setsRange(n - editor.lm, editor.lm));
   }
 
   const [left, right] = editorTeams();
