@@ -670,41 +670,79 @@ button.chip.up:hover { box-shadow: inset 0 0 0 1px var(--accent); color: var(--a
   font-weight: 500;
 }
 
-.ed-sets {
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 10px;
-}
-
-.ed-sets label {
-  display: grid;
-  justify-items: center;
-  gap: 4px;
+.ed-hint {
+  margin: 6px 0 0;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--faint);
 }
 
-.ed-dash { line-height: 40px; color: var(--faint); }
+.ed-hint:empty { display: none; }
 
-.ed-sets input {
-  width: 72px;
-  height: 40px;
+.editor fieldset[hidden] { display: none; }
+
+.ed-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.ed-table th,
+.ed-table td {
+  padding: 6px 4px;
+  text-align: center;
+}
+
+.ed-table thead th {
+  padding-top: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--faint);
+}
+
+.ed-table tbody th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.ed-table tbody tr + tr { border-top: 1px solid var(--line); }
+
+.ed-table small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.ed-table .bonus { color: var(--muted); }
+
+.ed-table .total { font-size: 16px; font-weight: 700; }
+
+.stepper {
+  display: inline-flex;
+  align-items: center;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--bg);
-  color: var(--ink);
-  font: inherit;
-  font-size: 18px;
-  font-weight: 600;
-  text-align: center;
 }
 
-.ed-warn {
-  margin: 8px 0 0;
-  font-size: 12px;
-  color: var(--loss);
-  text-align: center;
+.stepper button {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  background: none;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.stepper button:disabled { color: var(--line); cursor: default; }
+
+.stepper output {
+  min-width: 26px;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .ed-preview {

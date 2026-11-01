@@ -56,18 +56,18 @@
       </div>
 
       <fieldset>
-        <legend>Matches won <span class="ed-order" id="ed-m-order"></span></legend>
+        <legend>1. Matches won <span class="ed-order" id="ed-m-order"></span></legend>
         <div class="ed-matches" id="ed-matches"></div>
+        <p class="ed-hint" id="ed-hint"></p>
       </fieldset>
 
-      <fieldset>
-        <legend>Sets won</legend>
-        <div class="ed-sets">
-          <label><input id="ed-ls" type="number" inputmode="numeric" min="0"><span id="ed-ls-name"></span></label>
-          <span class="ed-dash">–</span>
-          <label><input id="ed-rs" type="number" inputmode="numeric" min="0"><span id="ed-rs-name"></span></label>
-        </div>
-        <p class="ed-warn" id="ed-warn" hidden></p>
+      <fieldset id="ed-score" hidden>
+        <legend>2. Sets and points</legend>
+        <table class="ed-table">
+          <thead><tr><th></th><th>Sets</th><th>Bonus</th><th>Points</th></tr></thead>
+          <tbody id="ed-rows"></tbody>
+        </table>
+        <p class="ed-hint">Starts at straight sets. Add a set for each match a team lost in three sets.</p>
       </fieldset>
 
       <p class="ed-preview" id="ed-preview"></p>

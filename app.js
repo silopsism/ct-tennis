@@ -590,8 +590,9 @@ function fixtureHTML(f) {
 // ---------- Score editor ----------
 
 // The editor reads from the side of the team whose row was tapped ("left"), like the tile did.
+// You pick the match score; sets start at straight sets and can only move within what's possible.
 // Scores are converted back to home/away when saved.
-const editor = { f: null, n: 6, flip: false, lm: 0, ls: 0, rs: 0 };
+const editor = { f: null, n: 6, flip: false, lm: null, ls: 0, rs: 0 };
 
 const club = (team) => splitTeam(team).club;
 
@@ -600,7 +601,8 @@ function editorTeams() {
   return flip ? [f.away, f.home] : [f.home, f.away];
 }
 
-// Each match is best of three, so the winner of a match takes 2 sets and the loser 0 or 1.
+// Each match is best of three: the winner takes 2 sets, the loser 0 or 1.
+// So a team has 2 sets per match won, plus at most 1 per match lost.
 function setsRange(won, lost) {
   return [2 * won, 2 * won + lost];
 }
@@ -609,97 +611,102 @@ function openEditor(id, team) {
   const d = state.model.get(state.slug);
   const f = d?.fixtures.find((x) => x.id === id);
   if (!f) return;
-  // Start from your saved score, else the projected score, so "what if" tweaks are one tap away.
-  const start = f.local ? f : projection(d).fixtures.get(id) ?? f;
   const n = matchesPerFixture(d);
   const flip = team === f.away;
-  const hm = start.homeMatches ?? Math.ceil(n / 2);
-  const hs = start.homeSets ?? 2 * hm;
-  const as = start.awaySets ?? 2 * (n - hm);
-  Object.assign(editor, { f, n, flip, lm: flip ? n - hm : hm, ls: flip ? as : hs, rs: flip ? hs : as });
+  Object.assign(editor, { f, n, flip, lm: null, ls: 0, rs: 0 });
+  if (f.local) {
+    // Reopen your saved score as it was.
+    editor.lm = flip ? f.awayMatches : f.homeMatches;
+    editor.ls = flip ? f.awaySets : f.homeSets;
+    editor.rs = flip ? f.homeSets : f.awaySets;
+  }
 
   const [left, right] = editorTeams();
+  const p = f.local ? null : projection(d).fixtures.get(id);
+  $('ed-hint').textContent = p
+    ? `Projected: ${club(left)} ${flip ? p.awayMatches : p.homeMatches}–${flip ? p.homeMatches : p.awayMatches}`
+    : '';
   $('ed-title').textContent = f.local ? 'Change your score' : 'Enter a score';
   $('ed-sub').textContent = `${d.name} · ${fmtDate(f.date, true)} · ${club(f.home)} at home`;
   $('ed-left').innerHTML = teamLabel(left);
   $('ed-right').innerHTML = teamLabel(right);
   $('ed-m-order').textContent = `(${club(left)} – ${club(right)})`;
-  $('ed-ls-name').textContent = club(left);
-  $('ed-rs-name').textContent = club(right);
-  $('ed-ls').setAttribute('aria-label', `Sets won by ${club(left)}`);
-  $('ed-rs').setAttribute('aria-label', `Sets won by ${club(right)}`);
   $('ed-remove').hidden = !f.local;
   $('ed-matches').innerHTML = Array.from({ length: n + 1 }, (_, i) => n - i)
-    .map((k) => `<button type="button" data-lm="${k}" aria-label="${club(left)} ${k}, ${club(right)} ${n - k}">${k}–${n - k}</button>`)
+    .map((k) => `<button type="button" data-lm="${k}" aria-label="${esc(club(left))} ${k}, ${esc(club(right))} ${n - k}">${k}–${n - k}</button>`)
     .join('');
-  $('ed-ls').max = $('ed-rs').max = 3 * n;
-  document.activeElement?.blur();
   syncEditor();
   $('editor').showModal();
 }
 
-function editorProblem() {
-  const { n, lm, ls, rs } = editor;
-  const rm = n - lm;
-  const [left, right] = editorTeams().map(club);
-  const [lMin, lMax] = setsRange(lm, rm);
-  const [rMin, rMax] = setsRange(rm, lm);
-  if (ls >= lMin && ls <= lMax && rs >= rMin && rs <= rMax) return null;
-  return `With ${lm}–${rm} in matches, ${left} must have ${lMin === lMax ? lMin : `${lMin} to ${lMax}`} sets and ` +
-    `${right} ${rMin === rMax ? rMin : `${rMin} to ${rMax}`} (every match is best of three).`;
-}
-
-function syncEditor() {
+function editorResult() {
   const { f, n, flip, lm, ls, rs } = editor;
-  for (const b of $('ed-matches').children) b.setAttribute('aria-pressed', String(+b.dataset.lm === lm));
-  // Leave the box being typed in alone, so it can be cleared and retyped.
-  if (document.activeElement !== $('ed-ls')) $('ed-ls').value = ls;
-  if (document.activeElement !== $('ed-rs')) $('ed-rs').value = rs;
-
-  const problem = editorProblem();
-  $('ed-warn').hidden = !problem;
-  $('ed-warn').textContent = problem ?? '';
-  $('ed-save').disabled = Boolean(problem);
-
-  const [left, right] = editorTeams();
-  const r = scoreFixture({
+  return scoreFixture({
     homeMatches: flip ? n - lm : lm, awayMatches: flip ? lm : n - lm,
     homeSets: flip ? rs : ls, awaySets: flip ? ls : rs, doubles: f.doubles,
   });
+}
+
+function syncEditor() {
+  const { n, flip, lm, ls, rs } = editor;
+  for (const b of $('ed-matches').children) b.setAttribute('aria-pressed', String(+b.dataset.lm === lm));
+  const picked = lm !== null;
+  $('ed-score').hidden = !picked;
+  $('ed-save').disabled = !picked;
+  if (!picked) {
+    $('ed-preview').textContent = 'Pick the match score to see sets and points.';
+    return;
+  }
+
+  const rm = n - lm;
+  const r = editorResult();
   const [lp, rp] = flip ? [r.awayPts, r.homePts] : [r.homePts, r.awayPts];
+  const [left, right] = editorTeams();
+  const row = (team, key, sets, [min, max], pts) => `
+    <tr>
+      <th scope="row">${esc(club(team))}</th>
+      <td>
+        <span class="stepper">
+          <button type="button" data-step="${key}" data-by="-1" ${sets <= min ? 'disabled' : ''} aria-label="One set fewer for ${esc(club(team))}">−</button>
+          <output aria-live="polite">${sets}</output>
+          <button type="button" data-step="${key}" data-by="1" ${sets >= max ? 'disabled' : ''} aria-label="One set more for ${esc(club(team))}">+</button>
+        </span>
+        <small>${min === max ? 'fixed' : `${min}–${max}`}</small>
+      </td>
+      <td class="bonus">${pts - sets ? `+${pts - sets}` : '–'}</td>
+      <td class="total">${pts}</td>
+    </tr>`;
+  $('ed-rows').innerHTML =
+    row(left, 'ls', ls, setsRange(lm, rm), lp) +
+    row(right, 'rs', rs, setsRange(rm, lm), rp);
+
   const who = r.result === 'D' ? 'Draw' : `${club((r.result === 'H') !== flip ? left : right)} win`;
-  $('ed-preview').innerHTML = problem
-    ? '&nbsp;'
-    : `${esc(who)} · League points <strong>${esc(club(left))} ${lp} – ${rp} ${esc(club(right))}</strong>`;
+  $('ed-preview').innerHTML = `${esc(who)} · <strong>${esc(club(left))} ${lp} – ${rp} ${esc(club(right))}</strong> league points`;
 }
-
-function setsInput(e) {
-  const v = Math.max(0, Math.min(3 * editor.n, Math.round(Number(e.target.value) || 0)));
-  editor[e.target.id === 'ed-ls' ? 'ls' : 'rs'] = v;
-  syncEditor();
-}
-
-$('ed-ls').addEventListener('input', setsInput);
-$('ed-rs').addEventListener('input', setsInput);
 
 $('ed-matches').addEventListener('click', (e) => {
   const b = e.target.closest('[data-lm]');
   if (!b) return;
-  const lm = +b.dataset.lm, rm = editor.n - lm;
-  editor.lm = lm;
-  // Keep the sets already entered if they still fit; otherwise move them to the nearest valid count.
-  editor.ls = clamp(editor.ls, ...setsRange(lm, rm));
-  editor.rs = clamp(editor.rs, ...setsRange(rm, lm));
-  // Show the adjusted numbers even if a sets box still has focus (Safari doesn't focus buttons on click).
-  $('ed-ls').value = editor.ls;
-  $('ed-rs').value = editor.rs;
+  const lm = +b.dataset.lm;
+  // A new match score resets the sets to straight sets.
+  Object.assign(editor, { lm, ls: 2 * lm, rs: 2 * (editor.n - lm) });
+  syncEditor();
+});
+
+$('ed-rows').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-step]');
+  if (!b) return;
+  const { n, lm } = editor;
+  const key = b.dataset.step;
+  const [min, max] = key === 'ls' ? setsRange(lm, n - lm) : setsRange(n - lm, lm);
+  editor[key] = clamp(editor[key] + Number(b.dataset.by), min, max);
   syncEditor();
 });
 
 $('ed-form').addEventListener('submit', (e) => {
   e.preventDefault();
-  if (editorProblem()) return;
   const { f, n, flip, lm, ls, rs } = editor;
+  if (lm === null) return;
   const hm = flip ? n - lm : lm;
   state.edits[f.id] = { hm, am: n - hm, hs: flip ? rs : ls, as: flip ? ls : rs };
   $('editor').close();
