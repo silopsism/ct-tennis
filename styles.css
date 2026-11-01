@@ -393,6 +393,57 @@ h2 {
 
 .standings .next small { color: var(--faint); }
 
+.standings th .sort {
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.standings th .sort:hover,
+.standings th .sort.on { color: var(--ink); }
+
+.standings th .arrow {
+  font-size: 9px;
+  margin-left: 2px;
+}
+
+.clubs-table .dom-band th {
+  padding-top: 8px;
+  padding-bottom: 0;
+  border-bottom: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.clubs-table .dom-start { box-shadow: inset 1px 0 0 var(--line); padding-left: 10px; }
+
+.clubs-table .dom-sub { color: var(--muted); }
+
+.hint strong { color: var(--muted); }
+
+@media (max-width: 560px) {
+  .clubs-table .team {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    max-width: 112px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: var(--surface);
+    box-shadow: inset -1px 0 0 var(--line);
+  }
+
+  .clubs-table .team-row:hover .team { background: var(--hover); }
+
+  .clubs-table .team .chev { display: none; }
+}
+
 .club-link {
   display: inline-block;
   margin-top: 8px;

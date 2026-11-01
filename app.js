@@ -22,6 +22,7 @@ const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7,
 const state = {
   rows: null, model: null, slug: null, view: 'standings', project: false, openTeam: null, fetchedAt: null,
   mode: 'leagues', clubs: new Map(), club: null, // "Clubs" view: all of one club's teams across leagues
+  clubSort: { key: 'all', dir: -1 }, domStep: 0.5,
   score: readPref(SCORE_KEY, ['matches', 'sets', 'points']) ?? 'matches',
   edits: readEdits(), // { fixtureId: { hm, am, hs, as } } — results entered on this device
 };
@@ -498,23 +499,73 @@ function teamFixturesHTML(d, team) {
 
 // ---------- Clubs ----------
 
-// Every club's teams across all leagues, with each team's current standing.
+// Every club's teams across all leagues, with each team's current standing and dominance score.
 function buildClubs(model) {
+  const step = divisionStep(model);
+  const tier = divisionTiers(model);
   const clubs = new Map();
   for (const d of model.values()) {
+    const weight = step ** tier.get(d);
     d.table.forEach((t, i) => {
       const { club, code } = splitTeam(t.team);
       const slug = slugify(club);
       if (!clubs.has(slug)) clubs.set(slug, { slug, name: club, teams: [] });
-      clubs.get(slug).teams.push({ ...t, code, d, pos: i + 1, of: d.table.length });
+      clubs.get(slug).teams.push({ ...t, code, d, pos: i + 1, of: d.table.length, dom: 100 * pointsShare(d, t) * weight });
     });
   }
   const groupIndex = (d) => {
     const i = GROUPS.findIndex((g) => g.key === d.group);
     return i < 0 ? GROUPS.length : i;
   };
-  for (const c of clubs.values()) c.teams.sort((a, b) => groupIndex(a.d) - groupIndex(b.d) || a.d.order - b.d.order);
+  for (const c of clubs.values()) {
+    c.teams.sort((a, b) => groupIndex(a.d) - groupIndex(b.d) || a.d.order - b.d.order);
+    c.dom = { all: 0 };
+    for (const t of c.teams) {
+      c.dom.all += t.dom;
+      c.dom[t.d.group] = (c.dom[t.d.group] ?? 0) + t.dom;
+    }
+  }
+  const byDom = [...clubs.values()].sort((a, b) => b.dom.all - a.dom.all);
+  byDom.forEach((c, i) => { c.rank = i + 1; });
+  state.domStep = step;
   return new Map([...clubs].sort((a, b) => a[1].name.localeCompare(b[1].name)));
+}
+
+// ---------- Dominance ----------
+// A team's share of the league points it could have taken, weighted by how high its division is.
+// Divisions are taken to overlap by a third: a division's winner is about as strong as the team
+// two-thirds of the way down the division above (6th of 8). So each step down is weighted by how many
+// points that 6th-placed team takes compared with the leader, measured across every league's table.
+
+function pointsShare(d, t) {
+  if (!t.P) return 0;
+  const format = GROUPS.find((g) => g.key === d.group)?.format ?? (d.fixtures[0]?.doubles ? 'doubles' : 'singles');
+  return t.Pts / (t.P * (2 * matchesPerFixture(d) + WIN_BONUS[format]));
+}
+
+function divisionStep(model) {
+  const ratios = [];
+  for (const d of model.values()) {
+    const shares = d.table.filter((t) => t.P).map((t) => pointsShare(d, t)).sort((a, b) => b - a);
+    const n = shares.length;
+    if (n < 4 || !shares[0]) continue;
+    const x = (2 * n - 1) / 3, i = Math.floor(x), f = x - i;
+    ratios.push((shares[i] * (1 - f) + (shares[i + 1] ?? shares[i]) * f) / shares[0]);
+  }
+  if (!ratios.length) return 0.5;
+  ratios.sort((a, b) => a - b);
+  return clamp(ratios[Math.floor(ratios.length / 2)], 0.2, 0.9);
+}
+
+// Tier 0 is the top division of each competition; parallel divisions (2A, 2B) share a tier.
+function divisionTiers(model) {
+  const tiers = new Map();
+  for (const g of new Set([...model.values()].map((d) => d.group))) {
+    const divs = [...model.values()].filter((d) => d.group === g);
+    const levels = [...new Set(divs.map((d) => Math.floor(d.order)))].sort((a, b) => a - b);
+    for (const d of divs) tiers.set(d, levels.indexOf(Math.floor(d.order)));
+  }
+  return tiers;
 }
 
 function clubTotals(c) {
@@ -526,30 +577,72 @@ function clubTotals(c) {
   return s;
 }
 
+// Sortable columns of the all-clubs table. Numbers sort high to low first; ties go to dominance, then name.
+// A value of -1 means "nothing to show" (no teams in that competition, or nothing played yet).
+const CLUB_COLUMNS = [
+  { key: 'name', label: 'Club', title: 'Club name', value: (c) => c.name },
+  { key: 'teams', label: 'Teams', title: 'Teams in the league', value: (c) => c.teams.length },
+  { key: 'top', label: '1st', title: 'Teams currently top of their league', value: (c) => c.totals.top },
+  { key: 'win', label: 'Win %', title: 'Share of fixtures won', value: (c) => (c.totals.P ? c.totals.W / c.totals.P : -1) },
+  { key: 'all', label: 'All', title: 'Dominance across all competitions', value: (c) => c.dom.all, dom: true },
+  ...GROUPS.map((g) => ({
+    key: g.key,
+    label: g.label.replace(/^(\w)\S*\s(\w).*$/, '$1$2').toUpperCase(),
+    title: `Dominance in ${g.label.toLowerCase()}`,
+    value: (c) => c.dom[g.key] ?? -1,
+    dom: true,
+  })),
+];
+
 function clubsHTML() {
-  const rows = [...state.clubs.values()].map((c) => {
-    const s = clubTotals(c);
+  const { key, dir } = state.clubSort;
+  const col = CLUB_COLUMNS.find((x) => x.key === key) ?? CLUB_COLUMNS[4];
+  const clubs = [...state.clubs.values()].map((c) => ({ ...c, totals: clubTotals(c) }));
+  clubs.sort((a, b) => {
+    const x = col.value(a), y = col.value(b);
+    if ((x === -1) !== (y === -1)) return x === -1 ? 1 : -1; // no teams there: always last
+    const cmp = typeof x === 'string' ? x.localeCompare(y) : x - y;
+    return dir * cmp || b.dom.all - a.dom.all || a.name.localeCompare(b.name);
+  });
+
+  const dom = (v) => (v === undefined ? '–' : Math.round(v));
+  const rows = clubs.map((c, i) => {
+    const s = c.totals;
     return `
       <tr class="team-row club-row" data-club="${c.slug}" tabindex="0">
+        <td class="pos">${i + 1}</td>
         <td class="team"><span class="team-name">${esc(c.name)}</span><span class="chev" aria-hidden="true">›</span></td>
         <td>${c.teams.length}</td>
         <td class="${s.top ? 'top-pos' : ''}">${s.top || '–'}</td>
-        <td class="wide">${s.P}</td><td>${s.W}</td><td class="wide">${s.D}</td><td class="wide">${s.L}</td>
-        <td class="pts">${s.P ? `${Math.round((100 * s.W) / s.P)}%` : '–'}</td>
+        <td>${s.P ? `${Math.round((100 * s.W) / s.P)}%` : '–'}</td>
+        <td class="pts dom-start">${dom(c.dom.all)}</td>
+        ${GROUPS.map((g) => `<td class="dom-sub">${dom(c.dom[g.key])}</td>`).join('')}
       </tr>`;
   }).join('');
+
+  const head = CLUB_COLUMNS.map((x) => {
+    const on = x.key === col.key;
+    const sort = on ? (dir > 0 ? 'ascending' : 'descending') : 'none';
+    const cls = [x.key === 'name' ? 'team' : '', x.key === 'all' ? 'dom-start' : ''].filter(Boolean).join(' ');
+    return `<th${cls ? ` class="${cls}"` : ''} aria-sort="${sort}">
+      <button type="button" class="sort${on ? ' on' : ''}" data-sort="${x.key}" title="${esc(x.title)}">${esc(x.label)}<span class="arrow" aria-hidden="true">${on ? (dir > 0 ? '▲' : '▼') : ''}</span></button></th>`;
+  }).join('');
+
   return `
-    <table class="standings">
-      <thead><tr>
-        <th class="team">Club</th><th title="Teams in the league">Teams</th>
-        <th title="Teams currently top of their league">1st</th>
-        <th class="wide" title="Played">P</th><th title="Won">W</th>
-        <th class="wide" title="Drawn">D</th><th class="wide" title="Lost">L</th>
-        <th title="Share of fixtures won">Win %</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <p class="hint">Tap a club to see all its teams. "1st" counts teams currently top of their league.</p>`;
+    <div class="scroll">
+      <table class="standings clubs-table">
+        <thead>
+          <tr class="dom-band"><th colspan="5"></th><th colspan="${1 + GROUPS.length}" class="dom-start">Dominance</th></tr>
+          <tr><th>#</th>${head}</tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <p class="hint">Tap a heading to sort, or a club to see all its teams. "1st" counts teams currently top of their league.</p>
+    <p class="hint"><strong>Dominance</strong> adds up each team's share of the league points it could have won (a perfect
+      record in a top division scores 100), weighted by division: each division down counts ×${state.domStep.toFixed(2)}.
+      That weight comes from the results, so a division's winner scores about the same as the team 6th of 8 in the
+      division above.</p>`;
 }
 
 function clubHTML(c) {
@@ -596,6 +689,7 @@ function clubHTML(c) {
       <strong>${c.teams.length}</strong> ${c.teams.length === 1 ? 'team' : 'teams'}
       · <strong>${s.top}</strong> top of their league
       · <strong>${s.W}</strong> won, <strong>${s.D}</strong> drawn, <strong>${s.L}</strong> lost
+      · dominance <strong>${Math.round(c.dom.all)}</strong> (${ordinal(c.rank)} of ${state.clubs.size})
     </p>
     <table class="standings club-teams">
       <thead><tr>
@@ -1065,6 +1159,14 @@ document.addEventListener('click', (e) => {
   const modeBtn = e.target.closest('[data-mode]');
   if (modeBtn) {
     return modeBtn.dataset.mode === 'clubs' ? selectClub(state.club) : select(state.slug ?? defaultSlug());
+  }
+
+  const sortBtn = e.target.closest('[data-sort]');
+  if (sortBtn) {
+    const key = sortBtn.dataset.sort;
+    const dir = state.clubSort.key === key ? -state.clubSort.dir : key === 'name' ? 1 : -1;
+    state.clubSort = { key, dir };
+    return renderPanel();
   }
 
   const clubRow = e.target.closest('.club-row');
