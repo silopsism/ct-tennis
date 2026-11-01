@@ -330,6 +330,80 @@ h2 {
   gap: 8px;
 }
 
+.tools[hidden] { display: none; }
+
+/* Leagues / Clubs switch and club picker */
+
+.mode-row { display: flex; }
+
+.club-pick {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 320px);
+  align-items: center;
+  gap: 10px;
+}
+
+.club-pick select {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+@media (max-width: 560px) {
+  .club-pick { grid-template-columns: 58px 1fr; gap: 8px; }
+}
+
+/* Club pages */
+
+.club-summary {
+  margin: 0;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.club-summary strong { color: var(--ink); }
+
+.standings .grp th {
+  padding: 14px 16px 6px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.standings .of { color: var(--faint); font-size: 12px; }
+
+.standings .top-pos { color: var(--accent); font-weight: 700; }
+
+.form { display: inline-flex; gap: 3px; }
+
+.form .pill { width: 18px; height: 18px; border-radius: 4px; font-size: 10px; }
+
+.standings .next { color: var(--muted); font-size: 13px; }
+
+.standings .next small { color: var(--faint); }
+
+.club-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.club-link:hover { text-decoration: underline; text-underline-offset: 2px; }
+
 .wand {
   display: grid;
   place-items: center;

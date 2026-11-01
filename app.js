@@ -21,6 +21,7 @@ const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7,
 
 const state = {
   rows: null, model: null, slug: null, view: 'standings', project: false, openTeam: null, fetchedAt: null,
+  mode: 'leagues', clubs: new Map(), club: null, // "Clubs" view: all of one club's teams across leagues
   score: readPref(SCORE_KEY, ['matches', 'sets', 'points']) ?? 'matches',
   edits: readEdits(), // { fixtureId: { hm, am, hs, as } } — results entered on this device
 };
@@ -354,12 +355,33 @@ function pendingTag(f) {
 }
 
 function renderNav() {
+  const modeRow = `
+    <div class="mode-row">
+      <div class="mini-toggle" role="group" aria-label="Browse by">
+        <button type="button" data-mode="leagues" aria-pressed="${state.mode === 'leagues'}">Leagues</button>
+        <button type="button" data-mode="clubs" aria-pressed="${state.mode === 'clubs'}">Clubs</button>
+      </div>
+    </div>`;
+
+  if (state.mode === 'clubs') {
+    $('divisions').innerHTML = modeRow + `
+      <label class="club-pick">
+        <span class="group-label">Club</span>
+        <select id="club-select">
+          <option value="">All clubs</option>
+          ${[...state.clubs.values()].map((c) => `
+            <option value="${c.slug}"${c.slug === state.club ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}
+        </select>
+      </label>`;
+    return;
+  }
+
   const divs = [...state.model.values()];
   const groups = GROUPS.map((g) => ({ ...g, divs: divs.filter((d) => d.group === g.key) }));
   const other = divs.filter((d) => !GROUPS.some((g) => g.key === d.group));
   if (other.length) groups.push({ key: 'other', label: 'Other', divs: other });
 
-  $('divisions').innerHTML = groups.filter((g) => g.divs.length).map((g) => `
+  $('divisions').innerHTML = modeRow + groups.filter((g) => g.divs.length).map((g) => `
     <div class="group" role="group" aria-label="${esc(g.label)}">
       <div class="group-label">${esc(g.label)}</div>
       <div class="group-buttons">
@@ -371,23 +393,45 @@ function renderNav() {
 }
 
 function renderPanel() {
+  if (state.mode === 'clubs') {
+    const c = state.clubs.get(state.club);
+    $('panel').hidden = false;
+    $('division-title').textContent = c ? c.name : 'All clubs';
+    document.querySelector('.tools').hidden = true;
+    $('content').innerHTML = c ? localNote(contextFixtures()) + clubHTML(c) : clubsHTML();
+    return;
+  }
+
   const d = state.model.get(state.slug);
   $('panel').hidden = !d;
   if (!d) return;
   $('division-title').textContent = d.name;
+  document.querySelector('.tools').hidden = false;
   for (const b of document.querySelectorAll('.toggle button')) {
     b.setAttribute('aria-selected', String(b.dataset.view === state.view));
   }
   $('wand').hidden = state.view !== 'weekly';
   $('wand').setAttribute('aria-pressed', String(state.project));
-  const mine = d.fixtures.filter((f) => f.local).length;
-  const note = mine
+  $('content').innerHTML = localNote(d.fixtures) + (state.view === 'fixtures' ? fixturesHTML(d)
+    : state.view === 'weekly' ? weeklyHTML(d)
+    : standingsHTML(d));
+}
+
+function localNote(fixtures) {
+  const mine = fixtures.filter((f) => f.local).length;
+  return mine
     ? `<p class="local-note">Includes ${mine === 1 ? 'a result' : `${mine} results`} you entered, saved only on this device.
         <button type="button" data-action="clear-local">Remove ${mine === 1 ? 'it' : 'them'}</button></p>`
     : '';
-  $('content').innerHTML = note + (state.view === 'fixtures' ? fixturesHTML(d)
-    : state.view === 'weekly' ? weeklyHTML(d)
-    : standingsHTML(d));
+}
+
+// Fixtures shown on the current page (one league, or every team of one club).
+function contextFixtures() {
+  if (state.mode === 'clubs') {
+    const c = state.clubs.get(state.club);
+    return c ? c.teams.flatMap((t) => t.d.fixtures.filter((f) => f.home === t.team || f.away === t.team)) : [];
+  }
+  return state.model.get(state.slug)?.fixtures ?? [];
 }
 
 function standingsHTML(d) {
@@ -447,7 +491,123 @@ function teamFixturesHTML(d, team) {
         <span>${mark}</span>
       </li>`;
   });
-  return `<ul class="tf-list">${items.join('') || '<li class="tf">No fixtures.</li>'}</ul>`;
+  const { club } = splitTeam(team);
+  return `<ul class="tf-list">${items.join('') || '<li class="tf">No fixtures.</li>'}</ul>
+    <a class="club-link" href="#/clubs/${slugify(club)}">All ${esc(club)} teams →</a>`;
+}
+
+// ---------- Clubs ----------
+
+// Every club's teams across all leagues, with each team's current standing.
+function buildClubs(model) {
+  const clubs = new Map();
+  for (const d of model.values()) {
+    d.table.forEach((t, i) => {
+      const { club, code } = splitTeam(t.team);
+      const slug = slugify(club);
+      if (!clubs.has(slug)) clubs.set(slug, { slug, name: club, teams: [] });
+      clubs.get(slug).teams.push({ ...t, code, d, pos: i + 1, of: d.table.length });
+    });
+  }
+  const groupIndex = (d) => {
+    const i = GROUPS.findIndex((g) => g.key === d.group);
+    return i < 0 ? GROUPS.length : i;
+  };
+  for (const c of clubs.values()) c.teams.sort((a, b) => groupIndex(a.d) - groupIndex(b.d) || a.d.order - b.d.order);
+  return new Map([...clubs].sort((a, b) => a[1].name.localeCompare(b[1].name)));
+}
+
+function clubTotals(c) {
+  const s = { P: 0, W: 0, D: 0, L: 0, top: 0 };
+  for (const t of c.teams) {
+    for (const k of ['P', 'W', 'D', 'L']) s[k] += t[k];
+    if (t.pos === 1 && t.P > 0) s.top++;
+  }
+  return s;
+}
+
+function clubsHTML() {
+  const rows = [...state.clubs.values()].map((c) => {
+    const s = clubTotals(c);
+    return `
+      <tr class="team-row club-row" data-club="${c.slug}" tabindex="0">
+        <td class="team"><span class="team-name">${esc(c.name)}</span><span class="chev" aria-hidden="true">›</span></td>
+        <td>${c.teams.length}</td>
+        <td class="${s.top ? 'top-pos' : ''}">${s.top || '–'}</td>
+        <td class="wide">${s.P}</td><td>${s.W}</td><td class="wide">${s.D}</td><td class="wide">${s.L}</td>
+        <td class="pts">${s.P ? `${Math.round((100 * s.W) / s.P)}%` : '–'}</td>
+      </tr>`;
+  }).join('');
+  return `
+    <table class="standings">
+      <thead><tr>
+        <th class="team">Club</th><th title="Teams in the league">Teams</th>
+        <th title="Teams currently top of their league">1st</th>
+        <th class="wide" title="Played">P</th><th title="Won">W</th>
+        <th class="wide" title="Drawn">D</th><th class="wide" title="Lost">L</th>
+        <th title="Share of fixtures won">Win %</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p class="hint">Tap a club to see all its teams. "1st" counts teams currently top of their league.</p>`;
+}
+
+function clubHTML(c) {
+  const s = clubTotals(c);
+  const now = today();
+  let group = null;
+  const rows = c.teams.map((t) => {
+    const g = GROUPS.find((x) => x.key === t.d.group);
+    const head = g && g.key !== group
+      ? `<tr class="grp"><th colspan="9">${esc(g.label)}</th></tr>`
+      : '';
+    group = g?.key ?? group;
+
+    const mine = t.d.fixtures.filter((f) => f.home === t.team || f.away === t.team);
+    const form = mine.filter((f) => f.played).slice(-5).map((f) => {
+      const isHome = f.home === t.team;
+      const res = f.result === 'D' ? 'D' : (f.result === 'H') === isHome ? 'W' : 'L';
+      const opp = isHome ? f.away : f.home;
+      return `<span class="pill ${res}" title="${{ W: 'Won', D: 'Drew', L: 'Lost' }[res]} v ${esc(opp)}, ${fmtDate(f.date)}">${res}</span>`;
+    }).join('');
+    const next = mine.find((f) => !f.played && f.date && f.date >= now);
+    const nextHTML = next
+      ? (() => {
+        const isHome = next.home === t.team;
+        const opp = isHome ? next.away : next.home;
+        return `<span title="${esc(opp)} (${isHome ? 'home' : 'away'})">${isHome ? 'v' : '@'} ${esc(t.d.abbr.get(opp) ?? opp)}</span> <small>${fmtDate(next.date)}</small>`;
+      })()
+      : '–';
+    const league = t.d.label === 'Premier' ? 'Premier' : `Division ${t.d.label}`;
+
+    return `${head}
+      <tr class="team-row" data-goto="${t.d.slug}" data-team="${esc(t.team)}" tabindex="0" title="Open ${esc(t.d.name)}">
+        <td class="team"><span class="team-name">${esc(league)}</span>${t.code ? `<span class="code">${esc(t.code)}</span>` : ''}<span class="chev" aria-hidden="true">›</span></td>
+        <td class="${t.pos === 1 && t.P ? 'top-pos' : ''}">${ordinal(t.pos)} <small class="of">of ${t.of}</small></td>
+        <td class="wide">${t.P}</td><td class="wide">${t.W}</td><td class="wide">${t.D}</td><td class="wide">${t.L}</td>
+        <td class="pts">${t.Pts}</td>
+        <td><span class="form">${form || '–'}</span></td>
+        <td class="wide next">${nextHTML}</td>
+      </tr>`;
+  }).join('');
+
+  return `
+    <p class="club-summary">
+      <strong>${c.teams.length}</strong> ${c.teams.length === 1 ? 'team' : 'teams'}
+      · <strong>${s.top}</strong> top of their league
+      · <strong>${s.W}</strong> won, <strong>${s.D}</strong> drawn, <strong>${s.L}</strong> lost
+    </p>
+    <table class="standings club-teams">
+      <thead><tr>
+        <th class="team">League</th><th>Position</th>
+        <th class="wide" title="Played">P</th><th class="wide" title="Won">W</th>
+        <th class="wide" title="Drawn">D</th><th class="wide" title="Lost">L</th>
+        <th title="League points">Pts</th><th title="Last five results, oldest first">Form</th>
+        <th class="wide">Next</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p class="hint">Tap a team to open its league. Form shows the last five results, oldest first.</p>`;
 }
 
 // Standings rows with one column per round: opponent code + match score, coloured by result.
@@ -753,20 +913,37 @@ function defaultSlug() {
   return (divs[0] || state.model.values().next().value)?.slug ?? null;
 }
 
+// Routes: #/<league>[/weekly[/projected]|/fixtures], #/clubs, #/clubs/<club>
 function readHash() {
-  const [slug, view, extra] = location.hash.replace(/^#\/?/, '').split('/');
-  return { slug: slug || null, view: VIEWS.includes(view) ? view : 'standings', project: extra === 'projected' };
+  const parts = location.hash.replace(/^#\/?/, '').split('/');
+  if (parts[0] === 'clubs') return { mode: 'clubs', club: parts[1] || null };
+  const [slug, view, extra] = parts;
+  return { mode: 'leagues', slug: slug || null, view: VIEWS.includes(view) ? view : 'standings', project: extra === 'projected' };
 }
 
 function writeHash() {
-  const view = state.view === 'standings' ? '' : `/${state.view}`;
-  const hash = `#/${state.slug}${view}${state.view === 'weekly' && state.project ? '/projected' : ''}`;
+  let hash;
+  if (state.mode === 'clubs') {
+    hash = `#/clubs${state.club ? `/${state.club}` : ''}`;
+  } else {
+    const view = state.view === 'standings' ? '' : `/${state.view}`;
+    hash = `#/${state.slug}${view}${state.view === 'weekly' && state.project ? '/projected' : ''}`;
+  }
   if (location.hash !== hash) history.replaceState(null, '', hash);
 }
 
 function applyHash() {
   if (!state.model) return;
   const h = readHash();
+  if (h.mode === 'clubs') {
+    state.mode = 'clubs';
+    state.club = state.clubs.has(h.club) ? h.club : null;
+    state.slug ??= defaultSlug();
+    writeHash();
+    render();
+    return;
+  }
+  state.mode = 'leagues';
   if (h.slug !== state.slug) state.openTeam = null;
   state.slug = state.model.has(h.slug) ? h.slug : defaultSlug();
   state.view = h.view;
@@ -777,10 +954,29 @@ function applyHash() {
 
 function select(slug, view) {
   if (slug !== state.slug) state.openTeam = null;
+  state.mode = 'leagues';
   state.slug = slug;
   state.view = view ?? state.view;
   writeHash();
   render();
+}
+
+function selectClub(slug) {
+  state.mode = 'clubs';
+  state.club = state.clubs.has(slug) ? slug : null;
+  writeHash();
+  render();
+}
+
+// From a club page to a team's league standings, with that team's results open.
+function openTeamInLeague(slug, team) {
+  state.mode = 'leagues';
+  state.slug = slug;
+  state.view = 'standings';
+  state.openTeam = team;
+  writeHash();
+  render();
+  document.querySelector('.team-row.open')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
 // ---------- Data ----------
@@ -822,6 +1018,7 @@ function saveEdits(edits) {
 function useCSV(csv, at) {
   state.rows = parseCSV(csv);
   state.model = buildModel(state.rows, state.edits);
+  state.clubs = buildClubs(state.model);
   state.fetchedAt = at;
 }
 
@@ -829,6 +1026,7 @@ function useCSV(csv, at) {
 function rebuild() {
   saveEdits(state.edits);
   state.model = buildModel(state.rows, state.edits);
+  state.clubs = buildClubs(state.model);
   render();
 }
 
@@ -864,6 +1062,17 @@ document.addEventListener('click', (e) => {
   const tab = e.target.closest('.toggle button');
   if (tab) return select(state.slug, tab.dataset.view);
 
+  const modeBtn = e.target.closest('[data-mode]');
+  if (modeBtn) {
+    return modeBtn.dataset.mode === 'clubs' ? selectClub(state.club) : select(state.slug ?? defaultSlug());
+  }
+
+  const clubRow = e.target.closest('.club-row');
+  if (clubRow) return selectClub(clubRow.dataset.club);
+
+  const goto = e.target.closest('[data-goto]');
+  if (goto) return openTeamInLeague(goto.dataset.goto, goto.dataset.team);
+
   if (e.target.closest('#wand')) {
     state.project = !state.project;
     writeHash();
@@ -881,7 +1090,7 @@ document.addEventListener('click', (e) => {
   if (tile) return openEditor(tile.dataset.fixture, tile.dataset.team);
 
   if (e.target.closest('[data-action="clear-local"]')) {
-    for (const f of state.model.get(state.slug)?.fixtures ?? []) if (f.local) delete state.edits[f.id];
+    for (const f of contextFixtures()) if (f.local) delete state.edits[f.id];
     return rebuild();
   }
 
@@ -902,6 +1111,10 @@ document.addEventListener('click', (e) => {
   }
 
   if (e.target.closest('[data-action="refresh"]')) refresh();
+});
+
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'club-select') selectClub(e.target.value || null);
 });
 
 document.addEventListener('keydown', (e) => {
