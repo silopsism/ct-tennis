@@ -22,7 +22,7 @@ const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7,
 const state = {
   rows: null, model: null, slug: null, view: 'standings', project: false, openTeam: null, fetchedAt: null,
   mode: 'leagues', clubs: new Map(), club: null, // "Clubs" view: all of one club's teams across leagues
-  clubSort: { key: 'all', dir: -1 }, domStep: 0.5,
+  clubSort: { key: 'all', dir: -1 }, domWeights: [1],
   score: readPref(SCORE_KEY, ['matches', 'sets', 'points']) ?? 'matches',
   edits: readEdits(), // { fixtureId: { hm, am, hs, as } } — results entered on this device
 };
@@ -501,11 +501,11 @@ function teamFixturesHTML(d, team) {
 
 // Every club's teams across all leagues, with each team's current standing and dominance score.
 function buildClubs(model) {
-  const step = divisionStep(model);
   const tier = divisionTiers(model);
+  const weights = tierWeights(Math.max(0, ...tier.values()));
   const clubs = new Map();
   for (const d of model.values()) {
-    const weight = step ** tier.get(d);
+    const weight = weights[tier.get(d)];
     d.table.forEach((t, i) => {
       const { club, code } = splitTeam(t.team);
       const slug = slugify(club);
@@ -527,15 +527,19 @@ function buildClubs(model) {
   }
   const byDom = [...clubs.values()].sort((a, b) => b.dom.all - a.dom.all);
   byDom.forEach((c, i) => { c.rank = i + 1; });
-  state.domStep = step;
+  state.domWeights = weights;
   return new Map([...clubs].sort((a, b) => a[1].name.localeCompare(b[1].name)));
 }
 
 // ---------- Dominance ----------
-// A team's share of the league points it could have taken, weighted by how high its division is.
-// Divisions are taken to overlap by a third: a division's winner is about as strong as the team
-// two-thirds of the way down the division above (6th of 8). So each step down is weighted by how many
-// points that 6th-placed team takes compared with the leader, measured across every league's table.
+// A team's share of the league points it could have taken, weighted by how high its division is,
+// so a weak team adds little wherever it plays and a strong one counts for more the higher it is.
+// Divisions sit on one ladder, each overlapping the one above (more so lower down, where the gaps
+// between divisions are smaller). A division's weight is the height of its middle on that ladder,
+// squared: lower divisions still count, but many middling teams can't outweigh a few strong ones.
+
+const DIVISION_OVERLAP = [0.2, 0.25, 0.3, 0.4, 0.5, 0.6]; // top→2nd, 2nd→3rd, …; the last applies further down
+const WEIGHT_CURVE = 2;
 
 function pointsShare(d, t) {
   if (!t.P) return 0;
@@ -543,18 +547,13 @@ function pointsShare(d, t) {
   return t.Pts / (t.P * (2 * matchesPerFixture(d) + WIN_BONUS[format]));
 }
 
-function divisionStep(model) {
-  const ratios = [];
-  for (const d of model.values()) {
-    const shares = d.table.filter((t) => t.P).map((t) => pointsShare(d, t)).sort((a, b) => b - a);
-    const n = shares.length;
-    if (n < 4 || !shares[0]) continue;
-    const x = (2 * n - 1) / 3, i = Math.floor(x), f = x - i;
-    ratios.push((shares[i] * (1 - f) + (shares[i + 1] ?? shares[i]) * f) / shares[0]);
-  }
-  if (!ratios.length) return 0.5;
-  ratios.sort((a, b) => a - b);
-  return clamp(ratios[Math.floor(ratios.length / 2)], 0.2, 0.9);
+// Weight per tier (0 = top division), from 1 at the top down to near 0 for the lowest tier there is.
+function tierWeights(lowest) {
+  const top = [0];
+  for (let k = 1; k <= lowest; k++) top.push(top[k - 1] + 1 - DIVISION_OVERLAP[Math.min(k - 1, DIVISION_OVERLAP.length - 1)]);
+  const length = top[lowest] + 1;
+  const height = (k) => 1 - (top[k] + 0.5) / length;
+  return top.map((_, k) => (height(k) / height(0)) ** WEIGHT_CURVE);
 }
 
 // Tier 0 is the top division of each competition; parallel divisions (2A, 2B) share a tier.
@@ -640,9 +639,9 @@ function clubsHTML() {
     </div>
     <p class="hint">Tap a heading to sort, or a club to see all its teams. "1st" counts teams currently top of their league.</p>
     <p class="hint"><strong>Dominance</strong> adds up each team's share of the league points it could have won (a perfect
-      record in a top division scores 100), weighted by division: each division down counts ×${state.domStep.toFixed(2)}.
-      That weight comes from the results, so a division's winner scores about the same as the team 6th of 8 in the
-      division above.</p>`;
+      record in a top division scores 100), weighted by division. Divisions overlap in strength, more so lower down
+      (${DIVISION_OVERLAP.map((o) => `${Math.round(o * 100)}%`).join(', ')} going down), so the weights from the top are
+      ${state.domWeights.map((w) => (w === 1 ? '1' : w.toFixed(2).replace(/^0/, ''))).join(' · ')}.</p>`;
 }
 
 function clubHTML(c) {
