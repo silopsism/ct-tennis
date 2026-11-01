@@ -4,6 +4,8 @@
 const SHEET_ID = '1iVX-93u-ydRftXX9PsBV0Cq0Q77084ZvRKxAem9tDuE';
 const RESULTS_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent('Results Entry')}`;
 const CACHE_KEY = 'ctt-results-v1';
+const EDITS_KEY = 'ctt-my-results-v1';
+const SCORE_KEY = 'ctt-score-view';
 const REFRESH_MS = 5 * 60 * 1000;
 
 const GROUPS = [
@@ -17,7 +19,11 @@ const VIEWS = ['standings', 'weekly', 'fixtures'];
 
 const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
 
-const state = { model: null, slug: null, view: 'standings', project: false, openTeam: null, fetchedAt: null };
+const state = {
+  rows: null, model: null, slug: null, view: 'standings', project: false, openTeam: null, fetchedAt: null,
+  score: readPref(SCORE_KEY, ['matches', 'sets', 'points']) ?? 'matches',
+  edits: readEdits(), // { fixtureId: { hm, am, hs, as } } — results entered on this device
+};
 
 const $ = (id) => document.getElementById(id);
 
@@ -87,8 +93,9 @@ function outcome(f) {
   return 'D';
 }
 
-function buildModel(rows) {
+function buildModel(rows, edits = {}) {
   const divisions = new Map();
+  const seen = new Set();
 
   for (const r of rows) {
     const id = clean(r['Fixture ID']);
@@ -116,7 +123,12 @@ function buildModel(rows) {
       f.result = outcome(f);
       f.homePts ??= f.homeSets ?? 0;
       f.awayPts ??= f.awaySets ?? 0;
+    } else if (edits[id]) {
+      const e = edits[id];
+      Object.assign(f, { homeMatches: e.hm, awayMatches: e.am, homeSets: e.hs, awaySets: e.as, played: true, local: true });
+      scoreFixture(f);
     }
+    seen.add(id);
 
     const slug = slugify(division);
     if (!divisions.has(slug)) {
@@ -141,6 +153,14 @@ function buildModel(rows) {
   }
   const edge = homeEdge([...divisions.values()].flatMap((d) => d.fixtures));
   for (const d of divisions.values()) d.homeEdge = edge;
+
+  // Once the official result is in the sheet (or the fixture is gone), your own entry is dropped.
+  const official = new Set([...divisions.values()].flatMap((d) => d.fixtures).filter((f) => f.played && !f.local).map((f) => f.id));
+  const stale = Object.keys(edits).filter((id) => official.has(id) || !seen.has(id));
+  if (stale.length && seen.size) {
+    for (const id of stale) delete edits[id];
+    saveEdits(edits);
+  }
   return divisions;
 }
 
@@ -275,11 +295,16 @@ function projectFixture(f, r, n, edge = 0) {
   }
 
   const pf = { ...f, homeMatches, awayMatches, homeSets, awaySets, played: true, projected: true, homeWinChance };
-  pf.result = outcome(pf);
+  return scoreFixture(pf);
+}
+
+// Result and league points from matches and sets won, per the Scoring Rules tab.
+function scoreFixture(f) {
+  f.result = outcome(f);
   const bonus = WIN_BONUS[f.doubles ? 'doubles' : 'singles'];
-  pf.homePts = homeSets + (pf.result === 'H' ? bonus : pf.result === 'D' ? DRAW_BONUS : 0);
-  pf.awayPts = awaySets + (pf.result === 'A' ? bonus : pf.result === 'D' ? DRAW_BONUS : 0);
-  return pf;
+  f.homePts = f.homeSets + (f.result === 'H' ? bonus : f.result === 'D' ? DRAW_BONUS : 0);
+  f.awayPts = f.awaySets + (f.result === 'A' ? bonus : f.result === 'D' ? DRAW_BONUS : 0);
+  return f;
 }
 
 // Played results plus projected ones for everything left; cached per division until the next data load.
@@ -355,9 +380,14 @@ function renderPanel() {
   }
   $('wand').hidden = state.view !== 'weekly';
   $('wand').setAttribute('aria-pressed', String(state.project));
-  $('content').innerHTML = state.view === 'fixtures' ? fixturesHTML(d)
+  const mine = d.fixtures.filter((f) => f.local).length;
+  const note = mine
+    ? `<p class="local-note">Includes ${mine === 1 ? 'a result' : `${mine} results`} you entered, saved only on this device.
+        <button type="button" data-action="clear-local">Remove ${mine === 1 ? 'it' : 'them'}</button></p>`
+    : '';
+  $('content').innerHTML = note + (state.view === 'fixtures' ? fixturesHTML(d)
     : state.view === 'weekly' ? weeklyHTML(d)
-    : standingsHTML(d);
+    : standingsHTML(d));
 }
 
 function standingsHTML(d) {
@@ -403,6 +433,7 @@ function teamFixturesHTML(d, team) {
       score = `${m1 ?? '–'}–${m2 ?? '–'}`;
       sub = `sets ${s1 ?? 0}–${s2 ?? 0} · ${p} pts`;
       if (isDefault(f)) sub += ' <span class="tag alert">Default</span>';
+      if (f.local) sub += ' <span class="tag mine">Your entry</span>';
       mark = `<span class="pill ${res}" title="${{ W: 'Won', D: 'Drew', L: 'Lost' }[res]}">${res}</span>`;
     } else {
       score = pendingTag(f);
@@ -447,10 +478,18 @@ function weeklyHTML(d) {
   }).join('');
 
   const hint = proj
-    ? `Dashed tiles are projected. Each team is rated on sets won so far, weighted by how strong its opponents were (walkovers left out), with a small home advantage. Every remaining fixture gets its most likely score. Ranked by projected finish. Hover a tile for the win chance.`
-    : 'Each week shows the opponent and match score. Tap a team for full results, or the wand to project the rest of the season.';
+    ? `Dashed tiles are projected. Each team is rated on sets won so far, weighted by how strong its opponents were (walkovers left out), with a small home advantage. Every remaining fixture gets its most likely score. Ranked by projected finish. Tap a dashed tile to try a different score.`
+    : 'Each week shows the opponent and score. Tap an upcoming tile to enter a result you know, a team for its full results, or the wand to project the rest of the season.';
+
+  const scoreToggle = `
+    <div class="wk-bar">
+      <div class="mini-toggle" role="group" aria-label="Score shown">
+        ${['matches', 'sets', 'points'].map((s) => `<button type="button" data-score="${s}" aria-pressed="${state.score === s}">${s[0].toUpperCase() + s.slice(1)}</button>`).join('')}
+      </div>
+    </div>`;
 
   return `
+    ${scoreToggle}
     <div class="scroll${proj ? ' projecting' : ''}">
       <table class="weekly">
         <thead><tr>
@@ -469,33 +508,42 @@ function ordinal(n) {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
+// Official results are fixed; upcoming, projected and your own results open the score editor.
 function weekCellHTML(d, f, team) {
   const isHome = f.home === team;
   const opp = isHome ? f.away : f.home;
   const code = esc(d.abbr.get(opp) ?? opp);
   const where = isHome ? 'home' : 'away';
-  if (f.projected) {
-    const [m1, m2, s1, s2, p] = isHome
-      ? [f.homeMatches, f.awayMatches, f.homeSets, f.awaySets, f.homePts]
-      : [f.awayMatches, f.homeMatches, f.awaySets, f.homeSets, f.awayPts];
-    const res = f.result === 'D' ? 'D' : (f.result === 'H') === isHome ? 'W' : 'L';
-    const chance = Math.round(100 * (isHome ? f.homeWinChance : 1 - f.homeWinChance));
-    const tip = `Projected ${{ W: 'win', D: 'draw', L: 'loss' }[res]} v ${opp} (${where}) · ${m1}–${m2} · sets ${s1}–${s2} · ${p} pts · ${chance}% chance of winning`;
-    return `<span class="chip proj ${res}" title="${esc(tip)}"><b>${code}</b><span>${m1}–${m2}</span></span>`;
-  }
+  const editable = !f.played || f.projected || f.local;
+  const tag = editable ? `button type="button" data-fixture="${esc(f.id)}"` : 'span';
+  const close = editable ? 'button' : 'span';
+
   if (!f.played) {
     const pp = /postpon/i.test(f.status);
     const pending = !pp && f.date && f.date < today();
     const label = pp ? 'PP' : pending ? '?' : '';
-    const tip = `${pp ? 'Postponed' : pending ? 'Result pending' : 'Upcoming'}: v ${opp} (${where})`;
-    return `<span class="chip up" title="${esc(tip)}"><b>${code}</b><span>${label || '&nbsp;'}</span></span>`;
+    const tip = `${pp ? 'Postponed' : pending ? 'Result pending' : 'Upcoming'}: v ${opp} (${where}). Tap to enter a score.`;
+    return `<${tag} class="chip up" title="${esc(tip)}"><b>${code}</b><span>${label || '&nbsp;'}</span></${close}>`;
   }
-  const [m1, m2, s1, s2, p] = isHome
-    ? [f.homeMatches, f.awayMatches, f.homeSets, f.awaySets, f.homePts]
-    : [f.awayMatches, f.homeMatches, f.awaySets, f.homeSets, f.awayPts];
+
+  const [m1, m2, s1, s2, p1, p2] = isHome
+    ? [f.homeMatches, f.awayMatches, f.homeSets, f.awaySets, f.homePts, f.awayPts]
+    : [f.awayMatches, f.homeMatches, f.awaySets, f.homeSets, f.awayPts, f.homePts];
   const res = f.result === 'D' ? 'D' : (f.result === 'H') === isHome ? 'W' : 'L';
-  const tip = `${{ W: 'Won', D: 'Drew', L: 'Lost' }[res]} v ${opp} (${where}) · ${m1 ?? '–'}–${m2 ?? '–'} · sets ${s1 ?? 0}–${s2 ?? 0} · ${p} pts`;
-  return `<span class="chip ${res}" title="${esc(tip)}"><b>${code}</b><span>${m1 ?? '–'}–${m2 ?? '–'}</span></span>`;
+  const shown = { matches: [m1, m2], sets: [s1, s2], points: [p1, p2] }[state.score];
+  const detail = `${m1 ?? '–'}–${m2 ?? '–'} · sets ${s1 ?? 0}–${s2 ?? 0} · ${p1} pts`;
+  let kind = '', tip;
+  if (f.projected) {
+    const chance = Math.round(100 * (isHome ? f.homeWinChance : 1 - f.homeWinChance));
+    kind = ' proj';
+    tip = `Projected ${{ W: 'win', D: 'draw', L: 'loss' }[res]} v ${opp} (${where}) · ${detail} · ${chance}% chance of winning. Tap to change.`;
+  } else if (f.local) {
+    kind = ' local';
+    tip = `Your result: ${{ W: 'won', D: 'drew', L: 'lost' }[res]} v ${opp} (${where}) · ${detail}. Tap to change.`;
+  } else {
+    tip = `${{ W: 'Won', D: 'Drew', L: 'Lost' }[res]} v ${opp} (${where}) · ${detail}`;
+  }
+  return `<${tag} class="chip${kind} ${res}" title="${esc(tip)}"><b>${code}</b><span>${shown[0] ?? '–'}–${shown[1] ?? '–'}</span></${close}>`;
 }
 
 function fixturesHTML(d) {
@@ -524,7 +572,11 @@ function fixtureHTML(f) {
     mid = `<div class="fx-vs">vs</div>${pendingTag(f)}`;
   }
   const defaulted = f.played && isDefault(f);
-  const note = [defaulted ? '<span class="tag alert">Default</span>' : '', f.notes ? esc(f.notes) : '']
+  const note = [
+    defaulted ? '<span class="tag alert">Default</span>' : '',
+    f.local ? '<span class="tag mine">Your entry</span>' : '',
+    f.notes ? esc(f.notes) : '',
+  ]
     .filter(Boolean).join(' ');
   return `
     <div class="fx">
@@ -534,6 +586,93 @@ function fixtureHTML(f) {
       ${note ? `<div class="fx-note">${note}</div>` : ''}
     </div>`;
 }
+
+// ---------- Score editor ----------
+
+const editor = { f: null, n: 6, hm: 0, hs: 0, as: 0 };
+
+function openEditor(id) {
+  const d = state.model.get(state.slug);
+  const f = d?.fixtures.find((x) => x.id === id);
+  if (!f) return;
+  // Start from your saved score, else the projected score, so "what if" tweaks are one tap away.
+  const start = f.local ? f : projection(d).fixtures.get(id) ?? f;
+  editor.f = f;
+  editor.n = matchesPerFixture(d);
+  editor.hm = start.homeMatches ?? Math.ceil(editor.n / 2);
+  editor.hs = start.homeSets ?? 2 * editor.hm;
+  editor.as = start.awaySets ?? 2 * (editor.n - editor.hm);
+
+  $('ed-title').textContent = f.local ? 'Change your score' : 'Enter a score';
+  $('ed-sub').textContent = `${d.name} · ${fmtDate(f.date, true)}`;
+  $('ed-home').innerHTML = teamLabel(f.home);
+  $('ed-away').innerHTML = teamLabel(f.away);
+  $('ed-remove').hidden = !f.local;
+  $('ed-matches').innerHTML = Array.from({ length: editor.n + 1 }, (_, i) => editor.n - i)
+    .map((k) => `<button type="button" data-hm="${k}">${k}–${editor.n - k}</button>`).join('');
+  $('ed-hs').max = $('ed-as').max = 3 * editor.n;
+  document.activeElement?.blur();
+  syncEditor();
+  $('editor').showModal();
+}
+
+function syncEditor() {
+  const { f, n, hm, hs, as } = editor;
+  const am = n - hm;
+  for (const b of $('ed-matches').children) b.setAttribute('aria-pressed', String(+b.dataset.hm === hm));
+  // Leave the box being typed in alone, so it can be cleared and retyped.
+  if (document.activeElement !== $('ed-hs')) $('ed-hs').value = hs;
+  if (document.activeElement !== $('ed-as')) $('ed-as').value = as;
+
+  const odd = hs < 2 * hm || hs > 2 * hm + am || as < 2 * am || as > 2 * am + hm;
+  $('ed-warn').hidden = !odd;
+  $('ed-warn').textContent = `With ${hm}–${am} in matches, sets are usually between ${2 * hm}–${2 * am + hm} and ${2 * hm + am}–${2 * am} (best of three).`;
+
+  const r = scoreFixture({ homeMatches: hm, awayMatches: am, homeSets: hs, awaySets: as, doubles: f.doubles });
+  const who = r.result === 'D' ? 'Draw' : `${splitTeam(r.result === 'H' ? f.home : f.away).club} win`;
+  $('ed-preview').innerHTML = `${esc(who)} · <strong>${r.homePts}–${r.awayPts}</strong> league points`;
+}
+
+function setsInput(e) {
+  const v = Math.max(0, Math.min(3 * editor.n, Math.round(Number(e.target.value) || 0)));
+  editor[e.target.id === 'ed-hs' ? 'hs' : 'as'] = v;
+  syncEditor();
+}
+
+$('ed-hs').addEventListener('input', setsInput);
+$('ed-as').addEventListener('input', setsInput);
+
+$('ed-matches').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-hm]');
+  if (!b) return;
+  const hm = +b.dataset.hm, am = editor.n - hm;
+  editor.hm = hm;
+  // Keep the sets you typed if they still fit; otherwise snap to the nearest valid count.
+  editor.hs = clamp(editor.hs, 2 * hm, 2 * hm + am);
+  editor.as = clamp(editor.as, 2 * am, 2 * am + hm);
+  syncEditor();
+});
+
+$('ed-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const { f, n, hm, hs, as } = editor;
+  state.edits[f.id] = { hm, am: n - hm, hs, as };
+  $('editor').close();
+  rebuild();
+});
+
+$('ed-remove').addEventListener('click', () => {
+  delete state.edits[editor.f.id];
+  $('editor').close();
+  rebuild();
+});
+
+$('ed-cancel').addEventListener('click', () => $('editor').close());
+
+// Close when tapping the dimmed backdrop.
+$('editor').addEventListener('click', (e) => {
+  if (e.target === $('editor')) $('editor').close();
+});
 
 function renderStatus(error) {
   const el = $('status');
@@ -606,9 +745,39 @@ function saveCache(csv, at) {
   try { localStorage.setItem(CACHE_KEY, JSON.stringify({ csv, at })); } catch { /* storage unavailable */ }
 }
 
+function readPref(key, allowed) {
+  try {
+    const v = localStorage.getItem(key);
+    return allowed.includes(v) ? v : null;
+  } catch { return null; }
+}
+
+function savePref(key, value) {
+  try { localStorage.setItem(key, value); } catch { /* storage unavailable */ }
+}
+
+function readEdits() {
+  try {
+    const e = JSON.parse(localStorage.getItem(EDITS_KEY));
+    return e && typeof e === 'object' ? e : {};
+  } catch { return {}; }
+}
+
+function saveEdits(edits) {
+  try { localStorage.setItem(EDITS_KEY, JSON.stringify(edits)); } catch { /* storage unavailable */ }
+}
+
 function useCSV(csv, at) {
-  state.model = buildModel(parseCSV(csv));
+  state.rows = parseCSV(csv);
+  state.model = buildModel(state.rows, state.edits);
   state.fetchedAt = at;
+}
+
+// Re-run the standings after one of your own results changes.
+function rebuild() {
+  saveEdits(state.edits);
+  state.model = buildModel(state.rows, state.edits);
+  render();
 }
 
 let loading = false;
@@ -647,6 +816,21 @@ document.addEventListener('click', (e) => {
     state.project = !state.project;
     writeHash();
     return renderPanel();
+  }
+
+  const scoreBtn = e.target.closest('[data-score]');
+  if (scoreBtn) {
+    state.score = scoreBtn.dataset.score;
+    savePref(SCORE_KEY, state.score);
+    return renderPanel();
+  }
+
+  const tile = e.target.closest('.chip[data-fixture]');
+  if (tile) return openEditor(tile.dataset.fixture);
+
+  if (e.target.closest('[data-action="clear-local"]')) {
+    for (const f of state.model.get(state.slug)?.fixtures ?? []) if (f.local) delete state.edits[f.id];
+    return rebuild();
   }
 
   const fxTeam = e.target.closest('.fx-team');

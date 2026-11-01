@@ -477,16 +477,60 @@ h2 {
 
 .wk { width: 58px; }
 
+.wk-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 16px 2px;
+}
+
+.mini-toggle {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.mini-toggle button {
+  border: 0;
+  background: none;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.mini-toggle button + button { border-left: 1px solid var(--line); }
+
+.mini-toggle button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 .chip {
   display: flex;
   flex-direction: column;
   align-items: center;
+  width: 100%;
   min-width: 52px;
   padding: 4px 4px 3px;
+  border: 0;
   border-radius: 7px;
+  background: none;
+  font: inherit;
   line-height: 1.2;
   cursor: default;
 }
+
+button.chip { cursor: pointer; }
+
+button.chip:hover { filter: brightness(0.96); }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) button.chip:hover { filter: brightness(1.2); }
+}
+
+button.chip.up:hover { box-shadow: inset 0 0 0 1px var(--accent); color: var(--accent); filter: none; }
 
 .chip + .chip { margin-top: 4px; }
 
@@ -511,6 +555,183 @@ h2 {
 }
 
 .chip.proj span { font-style: italic; }
+
+/* Your own results: filled like a real result, with a solid outline. */
+.chip.local {
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+.chip.local b::after {
+  content: " ✎";
+  font-weight: 400;
+}
+
+.local-note {
+  margin: 0;
+  padding: 9px 16px;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--line);
+}
+
+.local-note button {
+  border: 0;
+  background: none;
+  padding: 0;
+  margin-left: 4px;
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tag.mine { color: var(--accent); border-color: currentColor; }
+
+/* Score editor */
+
+.editor {
+  width: min(400px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 20px 50px rgb(0 0 0 / .25);
+}
+
+.editor::backdrop { background: rgb(10 16 12 / .45); }
+
+.editor form { padding: 18px 18px 16px; }
+
+.editor h3 { margin: 0; font-size: 17px; }
+
+.ed-sub { margin: 2px 0 14px; font-size: 13px; color: var(--muted); }
+
+.ed-teams {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  font-size: 15px;
+}
+
+.ed-teams > :first-child { text-align: right; }
+
+.ed-v { color: var(--faint); font-size: 13px; }
+
+.editor fieldset {
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+}
+
+.editor legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.ed-matches {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  gap: 4px;
+}
+
+.ed-matches button {
+  min-width: 0;
+  padding: 0;
+  height: 36px;
+  font-size: 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.ed-matches button[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.ed-sets {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.ed-sets input {
+  width: 72px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.ed-warn {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--draw);
+  text-align: center;
+}
+
+.ed-preview {
+  margin: 4px 0 8px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--bg);
+  text-align: center;
+  font-size: 14px;
+}
+
+.ed-note { margin: 0 0 14px; font-size: 12px; color: var(--faint); }
+
+.ed-actions { display: flex; align-items: center; gap: 8px; }
+
+.ed-spacer { flex: 1; }
+
+.ed-btn {
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ed-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.ed-remove {
+  border: 0;
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  color: var(--loss);
+  cursor: pointer;
+}
+
+.ed-remove[hidden] { display: none; }
 
 .weekly .move {
   margin-left: 2px;

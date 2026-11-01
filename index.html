@@ -44,6 +44,44 @@
     </section>
   </main>
 
+  <dialog id="editor" class="editor" aria-labelledby="ed-title">
+    <form method="dialog" id="ed-form">
+      <h3 id="ed-title">Enter a score</h3>
+      <p class="ed-sub" id="ed-sub"></p>
+
+      <div class="ed-teams">
+        <span id="ed-home"></span>
+        <span class="ed-v">v</span>
+        <span id="ed-away"></span>
+      </div>
+
+      <fieldset>
+        <legend>Matches</legend>
+        <div class="ed-matches" id="ed-matches"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Sets</legend>
+        <div class="ed-sets">
+          <input id="ed-hs" type="number" inputmode="numeric" min="0" aria-label="Home sets won">
+          <span>–</span>
+          <input id="ed-as" type="number" inputmode="numeric" min="0" aria-label="Away sets won">
+        </div>
+        <p class="ed-warn" id="ed-warn" hidden></p>
+      </fieldset>
+
+      <p class="ed-preview" id="ed-preview"></p>
+      <p class="ed-note">Saved on this device only. The official result replaces it once it's in the results sheet.</p>
+
+      <div class="ed-actions">
+        <button type="button" class="ed-remove" id="ed-remove">Remove my score</button>
+        <span class="ed-spacer"></span>
+        <button type="button" class="ed-btn" id="ed-cancel">Cancel</button>
+        <button type="submit" class="ed-btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="app.js"></script>
 </body>
 </html>
