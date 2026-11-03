@@ -10,7 +10,7 @@
 const TEAM_KEY = 'ctt-my-team';
 const NAME_KEY = 'ctt-captain-name';
 const ADMIN_STORE = 'ctt-admin-key';
-const SUBMIT_DAYS = 7; // same as SUBMIT_DAYS in server.js
+const SUBMIT_DAYS = 7; // same as SUBMIT_DAYS in server.js: how long a fixture already in the sheet stays listed
 const PHOTO_EDGE = 2000; // longest side of the uploaded photo, in pixels
 
 const sub = {
@@ -154,9 +154,11 @@ function submitHTML() {
     <p class="s-line">${teamLabel(team)} · ${esc(leagueName(d))}
       <button type="button" class="s-link" data-s="change-team">Change</button></p>`, true));
 
-  // 2. Fixture: this team's fixtures from the last few days
+  // 2. Fixture: this team's fixtures from the last week, plus older ones still without a result (postponed, or never entered)
   const now = today();
-  const recent = d.fixtures.filter((f) => (f.home === team || f.away === team) && f.date && f.date <= now && daysAgo(f.date) <= SUBMIT_DAYS);
+  const official = (x) => x.played && !x.local && !x.submitted;
+  const recent = d.fixtures.filter((x) => (x.home === team || x.away === team) && x.date && x.date <= now
+    && (daysAgo(x.date) <= SUBMIT_DAYS || !official(x)));
   if (recent.length === 1) sub.fixture = recent[0].id; // usually there's just this week's: no need to pick it
   const f = sub.fixture && recent.find((x) => x.id === sub.fixture);
   if (!f) {
@@ -165,14 +167,18 @@ function submitHTML() {
       ? `<p class="s-prompt">Which fixture are you submitting?</p>
         <div class="s-list">${recent.slice().reverse().map((x) => {
         const home = x.home === team;
-        const status = x.submitted ? SUB_LABEL[x.submitted] : x.played && !x.local ? 'In the results sheet' : 'Not submitted yet';
+        const status = x.submitted ? SUB_LABEL[x.submitted]
+          : official(x) ? 'In the results sheet'
+          : /postpon/i.test(x.status) ? 'Postponed'
+          : daysAgo(x.date) > SUBMIT_DAYS ? 'No result yet'
+          : 'Not submitted yet';
         return `
           <button type="button" class="s-item" data-s="fixture" data-id="${esc(x.id)}">
             <span>${fmtDate(x.date, true)} · ${home ? 'v' : '@'} ${esc(teamName(home ? x.away : x.home))}</span>
             <span class="s-status">${status}<span class="chev" aria-hidden="true">›</span></span>
           </button>`;
       }).join('')}</div>`
-      : `<p class="s-line muted">No fixtures in the last ${SUBMIT_DAYS} days.${next ? ` Next: ${fmtDate(next.date, true)}.` : ''}</p>`));
+      : `<p class="s-line muted">Nothing to submit: no fixtures in the last ${SUBMIT_DAYS} days, and no older results outstanding.${next ? ` Next fixture: ${fmtDate(next.date, true)}.` : ''}</p>`));
     return parts.join('') + laterSteps(3) + foot;
   }
   const home = f.home === team;

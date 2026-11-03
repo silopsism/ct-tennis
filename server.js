@@ -19,7 +19,7 @@ const SHEET_ID = '1iVX-93u-ydRftXX9PsBV0Cq0Q77084ZvRKxAem9tDuE';
 const RESULTS_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent('Results Entry')}`;
 const FIXTURES_TTL = 5 * 60 * 1000;
 
-const SUBMIT_DAYS = 7; // a result can be submitted from the fixture date until this many days after
+const SUBMIT_DAYS = 7; // days after the fixture its result can be submitted, if it's already in the sheet (otherwise any time)
 const MAX_BODY = 12 * 1024 * 1024;
 const MAX_PHOTO = 8 * 1024 * 1024;
 const POSTS_PER_HOUR = 30; // per IP address
@@ -266,7 +266,8 @@ async function submit(body) {
   if (!f) throw new HttpError(404, 'That fixture is not in the results sheet.');
   const today = todaySAST();
   if (!f.date || f.date > today) throw new HttpError(400, 'Results can be submitted from the day of the fixture.');
-  if (daysBetween(f.date, today) > SUBMIT_DAYS) throw new HttpError(400, `Results can only be submitted within ${SUBMIT_DAYS} days of the fixture.`);
+  // Older fixtures without a result (postponed, or never entered) stay open; ones in the sheet close after a week.
+  if (f.official && daysBetween(f.date, today) > SUBMIT_DAYS) throw new HttpError(400, 'This result is already in the results sheet.');
   const side = body.side === 'away' ? 'away' : 'home';
   const who = name(body.name);
   if (!who) throw new HttpError(400, 'Please add your name.');
