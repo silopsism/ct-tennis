@@ -1115,3 +1115,174 @@ button.chip.up:hover { box-shadow: inset 0 0 0 1px var(--accent); color: var(--a
   text-align: center;
   color: var(--muted);
 }
+
+/* Result submissions (submit.js) */
+
+.tag.sub { color: var(--draw); border-color: currentColor; }
+
+/* Submitted by a captain, not yet in the sheet: filled like a result, with a dotted outline. */
+.chip.sub { box-shadow: inset 0 0 0 1.5px currentColor; outline: 1.5px dotted currentColor; outline-offset: 1px; }
+
+.s-step {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.s-step h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.s-step.done h3 { margin-bottom: 4px; color: var(--muted); }
+
+.s-num {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.s-step.done .s-num { background: var(--accent-soft); color: var(--accent); }
+
+.s-line { margin: 0 0 4px; }
+
+.s-line.muted, .muted { color: var(--muted); font-size: 14px; }
+
+.s-detail { display: inline-block; margin-left: 6px; font-size: 13px; color: var(--muted); }
+
+.s-note { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+
+.s-error { margin: 0 0 10px; font-size: 14px; color: var(--loss); font-weight: 600; }
+
+.s-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  margin-left: 6px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.s-field {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.s-field select,
+.s-field input,
+.s-field textarea {
+  width: 100%;
+  max-width: 420px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+}
+
+.s-list { display: grid; gap: 6px; max-width: 520px; }
+
+.s-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.s-item:hover { border-color: var(--accent); background: var(--hover); }
+
+.s-status { font-size: 12px; color: var(--faint); white-space: nowrap; }
+
+.s-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+.s-actions .ed-btn,
+.s-step > .ed-btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+
+.s-photo {
+  display: block;
+  max-width: 100%;
+  max-height: 420px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 6px 0;
+}
+
+.s-done { padding: 16px; }
+
+.s-done > p { margin: 0 0 8px; }
+
+.s-big { font-size: 18px; font-weight: 700; color: var(--accent); }
+
+.s-linkbox {
+  padding: 9px 10px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.s-linkbox a { color: var(--accent); }
+
+.a-list { display: grid; }
+
+.a-card { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+
+.a-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.tag.a-confirmed, .tag.a-approved { color: var(--win); border-color: currentColor; }
+.tag.a-disputed { color: var(--loss); border-color: currentColor; }
+
+.a-extra { margin: 6px 0; padding-left: 18px; font-size: 13px; color: var(--muted); }
+
+.a-extra .bad, .a-sheet.bad { color: var(--loss); }
+
+.a-sheet { margin: 6px 0; font-size: 13px; color: var(--muted); }
+
+.a-sheet.ok { color: var(--win); }
+
+.a-sheet.ok::after { content: " ✓ matches"; font-weight: 600; }
+
+.a-sheet.bad::after { content: " ✗ differs"; font-weight: 600; }
+
+.a-photos { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+
+.a-photo img {
+  display: block;
+  width: 120px;
+  height: 160px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}

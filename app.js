@@ -16,6 +16,7 @@ const GROUPS = [
 ];
 
 const VIEWS = ['standings', 'weekly', 'fixtures'];
+const SUB_MODES = ['submit', 'confirm', 'admin']; // captains' result submissions, in submit.js
 
 const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
 
@@ -25,6 +26,8 @@ const state = {
   clubSort: { key: 'all', dir: -1 }, domWeights: [1],
   score: readPref(SCORE_KEY, ['matches', 'sets', 'points']) ?? 'matches',
   edits: readEdits(), // { fixtureId: { hm, am, hs, as } } — results entered on this device
+  api: false, // true when served by server.js (salwood), which takes captains' submissions
+  subs: {}, // { fixtureId: { hm, am, hs, as, status, side } } — submitted by captains, not yet in the sheet
 };
 
 const $ = (id) => document.getElementById(id);
@@ -95,7 +98,7 @@ function outcome(f) {
   return 'D';
 }
 
-function buildModel(rows, edits = {}) {
+function buildModel(rows, edits = {}, subs = {}) {
   const divisions = new Map();
   const seen = new Set();
 
@@ -125,6 +128,11 @@ function buildModel(rows, edits = {}) {
       f.result = outcome(f);
       f.homePts ??= f.homeSets ?? 0;
       f.awayPts ??= f.awaySets ?? 0;
+    } else if (subs[id] && subs[id].status !== 'disputed') {
+      // A captain's submission counts until the official result reaches the sheet.
+      const s = subs[id];
+      Object.assign(f, { homeMatches: s.hm, awayMatches: s.am, homeSets: s.hs, awaySets: s.as, played: true, submitted: s.status, by: s.side });
+      scoreFixture(f);
     } else if (edits[id]) {
       const e = edits[id];
       Object.assign(f, { homeMatches: e.hm, awayMatches: e.am, homeSets: e.hs, awaySets: e.as, played: true, local: true });
@@ -157,7 +165,7 @@ function buildModel(rows, edits = {}) {
   for (const d of divisions.values()) d.homeEdge = edge;
 
   // Once the official result is in the sheet (or the fixture is gone), your own entry is dropped.
-  const official = new Set([...divisions.values()].flatMap((d) => d.fixtures).filter((f) => f.played && !f.local).map((f) => f.id));
+  const official = new Set([...divisions.values()].flatMap((d) => d.fixtures).filter((f) => f.played && !f.local && !f.submitted).map((f) => f.id));
   const stale = Object.keys(edits).filter((id) => official.has(id) || !seen.has(id));
   if (stale.length && seen.size) {
     for (const id of stale) delete edits[id];
@@ -349,6 +357,22 @@ function today() {
   return new Date(n.getFullYear(), n.getMonth(), n.getDate());
 }
 
+// Captains' submissions: shown until the official result reaches the sheet.
+const SUB_LABEL = { pending: 'Submitted', confirmed: 'Confirmed', approved: 'Approved' };
+
+function subNote(f) {
+  const by = splitTeam(f.by === 'away' ? f.away : f.home).club;
+  return {
+    pending: `Submitted by ${by}'s captain, awaiting the other team. Not in the results sheet yet.`,
+    confirmed: 'Submitted and confirmed by both teams. Not in the results sheet yet.',
+    approved: 'Approved by the league. Not in the results sheet yet.',
+  }[f.submitted];
+}
+
+function subTag(f) {
+  return f.submitted ? `<span class="tag sub" title="${esc(subNote(f))}">${SUB_LABEL[f.submitted]}</span>` : '';
+}
+
 function pendingTag(f) {
   if (/postpon/i.test(f.status)) return '<span class="tag">Postponed</span>';
   if (f.date && f.date < today()) return '<span class="tag">Result pending</span>';
@@ -361,8 +385,14 @@ function renderNav() {
       <div class="mini-toggle" role="group" aria-label="Browse by">
         <button type="button" data-mode="leagues" aria-pressed="${state.mode === 'leagues'}">Leagues</button>
         <button type="button" data-mode="clubs" aria-pressed="${state.mode === 'clubs'}">Clubs</button>
+        ${state.api ? `<button type="button" data-mode="submit" aria-pressed="${state.mode === 'submit'}">Submit a result</button>` : ''}
       </div>
     </div>`;
+
+  if (SUB_MODES.includes(state.mode)) {
+    $('divisions').innerHTML = modeRow;
+    return;
+  }
 
   if (state.mode === 'clubs') {
     $('divisions').innerHTML = modeRow + `
@@ -394,6 +424,15 @@ function renderNav() {
 }
 
 function renderPanel() {
+  if (SUB_MODES.includes(state.mode)) {
+    const { title, html } = subPanel(); // submit.js
+    $('panel').hidden = false;
+    $('division-title').textContent = title;
+    document.querySelector('.tools').hidden = true;
+    $('content').innerHTML = html;
+    return;
+  }
+
   if (state.mode === 'clubs') {
     const c = state.clubs.get(state.club);
     $('panel').hidden = false;
@@ -479,6 +518,7 @@ function teamFixturesHTML(d, team) {
       sub = `sets ${s1 ?? 0}–${s2 ?? 0} · ${p} pts`;
       if (isDefault(f)) sub += ' <span class="tag alert">Default</span>';
       if (f.local) sub += ' <span class="tag mine">Your entry</span>';
+      if (f.submitted) sub += ` ${subTag(f)}`;
       mark = `<span class="pill ${res}" title="${{ W: 'Won', D: 'Drew', L: 'Lost' }[res]}">${res}</span>`;
     } else {
       score = pendingTag(f);
@@ -793,6 +833,9 @@ function weekCellHTML(d, f, team) {
   } else if (f.local) {
     kind = ' local';
     tip = `Your result: ${{ W: 'won', D: 'drew', L: 'lost' }[res]} v ${opp} (${where}) · ${detail}. Tap to change.`;
+  } else if (f.submitted) {
+    kind = ' sub';
+    tip = `${{ W: 'Won', D: 'Drew', L: 'Lost' }[res]} v ${opp} (${where}) · ${detail}. ${subNote(f)}`;
   } else {
     tip = `${{ W: 'Won', D: 'Drew', L: 'Lost' }[res]} v ${opp} (${where}) · ${detail}`;
   }
@@ -828,6 +871,7 @@ function fixtureHTML(f) {
   const note = [
     defaulted ? '<span class="tag alert">Default</span>' : '',
     f.local ? '<span class="tag mine">Your entry</span>' : '',
+    subTag(f),
     f.notes ? esc(f.notes) : '',
   ]
     .filter(Boolean).join(' ');
@@ -845,7 +889,8 @@ function fixtureHTML(f) {
 // The editor reads from the side of the team whose row was tapped ("left"), like the tile did.
 // You pick the match score; sets start at straight sets and can only move within what's possible.
 // Scores are converted back to home/away when saved.
-const editor = { f: null, n: 6, flip: false, lm: null, ls: 0, rs: 0 };
+// With `submit`, it's a captain entering a result for submission rather than a score kept on this device.
+const editor = { f: null, n: 6, flip: false, lm: null, ls: 0, rs: 0, submit: false };
 
 const club = (team) => splitTeam(team).club;
 
@@ -860,31 +905,36 @@ function setsRange(won, lost) {
   return [2 * won, 2 * won + lost];
 }
 
-function openEditor(id, team) {
-  const d = state.model.get(state.slug);
+// `start` reopens a score already entered: { hm, am, hs, as } (home/away).
+function openEditor(id, team, { d = state.model.get(state.slug), submit = false, start = null } = {}) {
   const f = d?.fixtures.find((x) => x.id === id);
   if (!f) return;
   const n = matchesPerFixture(d);
   const flip = team === f.away;
-  Object.assign(editor, { f, n, flip, lm: null, ls: 0, rs: 0 });
-  if (f.local) {
-    // Reopen your saved score as it was (pulled into range if it was saved by an older version).
-    editor.lm = clamp(flip ? f.awayMatches : f.homeMatches, 0, n);
-    editor.ls = clamp(flip ? f.awaySets : f.homeSets, ...setsRange(editor.lm, n - editor.lm));
-    editor.rs = clamp(flip ? f.homeSets : f.awaySets, ...setsRange(n - editor.lm, editor.lm));
+  Object.assign(editor, { f, n, flip, lm: null, ls: 0, rs: 0, submit });
+  start ??= f.local && !submit ? { hm: f.homeMatches, am: f.awayMatches, hs: f.homeSets, as: f.awaySets } : null;
+  if (start) {
+    // Reopen the score as it was (pulled into range if it was saved by an older version).
+    editor.lm = clamp(flip ? start.am : start.hm, 0, n);
+    editor.ls = clamp(flip ? start.as : start.hs, ...setsRange(editor.lm, n - editor.lm));
+    editor.rs = clamp(flip ? start.hs : start.as, ...setsRange(n - editor.lm, editor.lm));
   }
 
   const [left, right] = editorTeams();
-  const p = f.local ? null : projection(d).fixtures.get(id);
+  const p = f.local || submit ? null : projection(d).fixtures.get(id);
   $('ed-hint').textContent = p
     ? `Projected: ${club(left)} ${flip ? p.awayMatches : p.homeMatches}–${flip ? p.homeMatches : p.awayMatches}`
     : '';
-  $('ed-title').textContent = f.local ? 'Change your score' : 'Enter a score';
+  $('ed-title').textContent = submit ? 'Enter the result' : f.local ? 'Change your score' : 'Enter a score';
   $('ed-sub').textContent = `${d.name} · ${fmtDate(f.date, true)} · ${club(f.home)} at home`;
   $('ed-left').innerHTML = teamLabel(left);
   $('ed-right').innerHTML = teamLabel(right);
   $('ed-m-order').textContent = `(${club(left)} – ${club(right)})`;
-  $('ed-remove').hidden = !f.local;
+  $('ed-remove').hidden = !f.local || submit;
+  $('ed-note').textContent = submit
+    ? 'Next you add a photo of the signed score sheet.'
+    : "Saved on this device only. The official result replaces it once it's in the results sheet.";
+  $('ed-save').textContent = submit ? 'Next' : 'Save';
   $('ed-matches').innerHTML = Array.from({ length: n + 1 }, (_, i) => n - i)
     .map((k) => `<button type="button" data-lm="${k}" aria-label="${esc(club(left))} ${k}, ${esc(club(right))} ${n - k}">${k}–${n - k}</button>`)
     .join('');
@@ -961,8 +1011,10 @@ $('ed-form').addEventListener('submit', (e) => {
   const { f, n, flip, lm, ls, rs } = editor;
   if (lm === null) return;
   const hm = flip ? n - lm : lm;
-  state.edits[f.id] = { hm, am: n - hm, hs: flip ? rs : ls, as: flip ? ls : rs };
+  const score = { hm, am: n - hm, hs: flip ? rs : ls, as: flip ? ls : rs };
   $('editor').close();
+  if (editor.submit) return scoreEntered(f, score); // submit.js
+  state.edits[f.id] = score;
   rebuild();
 });
 
@@ -1006,17 +1058,21 @@ function defaultSlug() {
   return (divs[0] || state.model.values().next().value)?.slug ?? null;
 }
 
-// Routes: #/<league>[/weekly[/projected]|/fixtures], #/clubs, #/clubs/<club>
+// Routes: #/<league>[/weekly[/projected]|/fixtures], #/clubs, #/clubs/<club>,
+// #/submit, #/confirm/<fixture>/<link code>, #/admin
 function readHash() {
   const parts = location.hash.replace(/^#\/?/, '').split('/');
   if (parts[0] === 'clubs') return { mode: 'clubs', club: parts[1] || null };
+  if (SUB_MODES.includes(parts[0])) return { mode: parts[0], id: parts[1] || null, token: parts[2] || null };
   const [slug, view, extra] = parts;
   return { mode: 'leagues', slug: slug || null, view: VIEWS.includes(view) ? view : 'standings', project: extra === 'projected' };
 }
 
 function writeHash() {
   let hash;
-  if (state.mode === 'clubs') {
+  if (SUB_MODES.includes(state.mode)) {
+    hash = subHash(); // submit.js
+  } else if (state.mode === 'clubs') {
     hash = `#/clubs${state.club ? `/${state.club}` : ''}`;
   } else {
     const view = state.view === 'standings' ? '' : `/${state.view}`;
@@ -1028,6 +1084,14 @@ function writeHash() {
 function applyHash() {
   if (!state.model) return;
   const h = readHash();
+  if (SUB_MODES.includes(h.mode)) {
+    state.mode = h.mode;
+    state.slug ??= defaultSlug();
+    enterSubMode(h); // submit.js
+    writeHash();
+    render();
+    return;
+  }
   if (h.mode === 'clubs') {
     state.mode = 'clubs';
     state.club = state.clubs.has(h.club) ? h.club : null;
@@ -1110,15 +1174,16 @@ function saveEdits(edits) {
 
 function useCSV(csv, at) {
   state.rows = parseCSV(csv);
-  state.model = buildModel(state.rows, state.edits);
+  state.model = buildModel(state.rows, state.edits, state.subs);
   state.clubs = buildClubs(state.model);
   state.fetchedAt = at;
 }
 
-// Re-run the standings after one of your own results changes.
+// Re-run the standings after one of your own results (or a captain's submission) changes.
 function rebuild() {
   saveEdits(state.edits);
-  state.model = buildModel(state.rows, state.edits);
+  if (!state.rows) return;
+  state.model = buildModel(state.rows, state.edits, state.subs);
   state.clubs = buildClubs(state.model);
   render();
 }
@@ -1134,6 +1199,7 @@ async function refresh() {
     const csv = await res.text();
     if (!/Fixture ID/i.test(csv.slice(0, 500))) throw new Error('Unexpected response');
     const at = Date.now();
+    await loadSubmissions(); // submit.js
     useCSV(csv, at);
     saveCache(csv, at);
     renderStatus();
@@ -1157,7 +1223,9 @@ document.addEventListener('click', (e) => {
 
   const modeBtn = e.target.closest('[data-mode]');
   if (modeBtn) {
-    return modeBtn.dataset.mode === 'clubs' ? selectClub(state.club) : select(state.slug ?? defaultSlug());
+    const mode = modeBtn.dataset.mode;
+    if (mode === 'submit') return void (location.hash = '#/submit');
+    return mode === 'clubs' ? selectClub(state.club) : select(state.slug ?? defaultSlug());
   }
 
   const sortBtn = e.target.closest('[data-sort]');
