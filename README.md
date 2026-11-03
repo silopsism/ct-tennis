@@ -30,6 +30,7 @@ Live standings and fixture results, read straight from the **Results Entry** tab
   - Build pack `dockerfile`: Node running `server.js` on port 80.
   - It needs a persistent storage volume mounted at `/data` and an `ADMIN_KEY` environment variable.
   - To update: push to `main`, then Redeploy in Coolify.
+  - Phones pick up a deploy without needing a refresh. `server.js` links the CSS and JS with a fingerprint of their contents (`app.js?v=…`), and serves the page itself with `no-store`.
 - https://silopsism.github.io/ct-tennis/ is GitHub Pages: the static site only, updated automatically on push.
 
 Run locally with `node server.js` and open http://localhost:8417.

@@ -39,6 +39,20 @@ const STATIC = {
 
 fs.mkdirSync(PHOTO_DIR, { recursive: true });
 
+// The page links each file with a fingerprint of its contents ("app.js?v=3f9c…"). Phones can then keep the
+// files cached, and still fetch a new copy as soon as a deploy changes one, with no refresh needed.
+const ASSETS = ['styles.css', 'submit.js', 'app.js'];
+
+async function indexHTML() {
+  let html = await fs.promises.readFile(path.join(ROOT, 'index.html'), 'utf8');
+  for (const file of ASSETS) {
+    const data = await fs.promises.readFile(path.join(ROOT, file));
+    const hash = crypto.createHash('sha1').update(data).digest('hex').slice(0, 10);
+    html = html.replace(`"${file}"`, `"${file}?v=${hash}"`);
+  }
+  return html;
+}
+
 // ---------- Fixtures (read from the results sheet, same as the site) ----------
 
 function parseCSV(text) {
@@ -392,9 +406,11 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       return res.end('Not found');
     }
-    const data = await fs.promises.readFile(path.join(ROOT, file[0]));
-    // Files change on every deploy, so browsers must re-check them.
-    res.writeHead(200, { 'Content-Type': file[1], 'Cache-Control': 'no-cache' });
+    const page = file[0] === 'index.html';
+    const data = page ? await indexHTML() : await fs.promises.readFile(path.join(ROOT, file[0]));
+    // The page is never reused from cache; fingerprinted files never change, so they can be kept.
+    const cache = page ? 'no-store' : url.searchParams.has('v') ? 'public, max-age=31536000, immutable' : 'no-cache';
+    res.writeHead(200, { 'Content-Type': file[1], 'Cache-Control': cache });
     res.end(req.method === 'HEAD' ? undefined : data);
   } catch (err) {
     if (!(err instanceof HttpError)) console.error(err);
