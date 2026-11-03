@@ -14,7 +14,15 @@ Live standings and fixture results, read straight from the **Results Entry** tab
 
 `server.js` serves the site and a small API, with no dependencies. On GitHub Pages there's no server, so the Submit button doesn't appear.
 
-- **Captains** go to `#/submit`. They pick their club and team (remembered on the phone), then a fixture from the last 7 days. They enter the score with the score editor, add a photo of the signed sheet (camera or gallery, shrunk on the phone to about 2000 px), and add their name.
+- **Captains** go to `#/submit`. They pick their club and team (remembered on the phone), then a fixture. The list covers the last 7 days, plus any older fixture still without a result. They add a photo of the signed sheet (camera or gallery, shrunk on the phone to about 2000 px), check or enter the score in the score editor, and add their name.
+- **Reading the photo** is optional, and only happens if `GEMINI_API_KEY` is set.
+  - The server sends the photo to Gemini: `GEMINI_MODELS`, default `gemini-flash-lite-latest,gemini-3.5-flash-lite`.
+  - It takes the result from the rows: each row's match and sets must fit best-of-three, and the rows must add up to the division's match count.
+  - Only then is the score filled in. Otherwise the captain types it.
+  - A reading that doesn't add up, or a busy model, falls through to the next model.
+  - Doubts are shown as warnings: game scores that disagree with the sets column, or a totals box that disagrees with the rows.
+  - The match-by-match detail (players, game scores) is stored with the submission and shown on the confirm and admin pages.
+  - Free-tier Gemini may use what's sent to improve Google's products.
 - **They get a confirm link** (`#/confirm/<fixture>/<code>`) to send to the other captain, with a WhatsApp button. The other captain confirms it, or marks it disputed with a note.
   - If the other team submits the same score themselves, that counts as confirming it.
   - A different score marks the result disputed.
@@ -29,6 +37,7 @@ Live standings and fixture results, read straight from the **Results Entry** tab
 - https://ctt.salwood.co.za is a Coolify app, behind the Cloudflare Tunnel route `ctt.salwood.co.za` → `http://192.168.3.60:80`.
   - Build pack `dockerfile`: Node running `server.js` on port 80.
   - It needs a persistent storage volume mounted at `/data` and an `ADMIN_KEY` environment variable.
+  - Optionally it takes a `GEMINI_API_KEY`, which turns on photo reading.
   - To update: push to `main`, then Redeploy in Coolify.
   - Phones pick up a deploy without needing a refresh. `server.js` links the CSS and JS with a fingerprint of their contents (`app.js?v=…`), and serves the page itself with `no-store`.
 - https://silopsism.github.io/ct-tennis/ is GitHub Pages: the static site only, updated automatically on push.

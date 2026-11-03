@@ -932,7 +932,7 @@ function openEditor(id, team, { d = state.model.get(state.slug), submit = false,
   $('ed-m-order').textContent = `(${club(left)} – ${club(right)})`;
   $('ed-remove').hidden = !f.local || submit;
   $('ed-note').textContent = submit
-    ? 'Next you add a photo of the signed score sheet.'
+    ? 'Check it against the signed score sheet.'
     : "Saved on this device only. The official result replaces it once it's in the results sheet.";
   $('ed-save').textContent = submit ? 'Next' : 'Save';
   $('ed-matches').innerHTML = Array.from({ length: n + 1 }, (_, i) => n - i)

@@ -25,6 +25,12 @@ const MAX_PHOTO = 8 * 1024 * 1024;
 const POSTS_PER_HOUR = 30; // per IP address
 const SAST_OFFSET = 2 * 60 * 60 * 1000;
 
+// Reading score sheets from the photo (optional: off unless GEMINI_API_KEY is set). Tried in order when one is busy.
+const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
+const GEMINI_MODELS = (process.env.GEMINI_MODELS || 'gemini-flash-lite-latest,gemini-3.5-flash-lite').split(',').map((m) => m.trim());
+const READ_TIMEOUT = 25 * 1000;
+const READ_TTL = 2 * 60 * 60 * 1000; // a reading is kept this long for the submission that follows it
+
 // Scoring Rules tab: 1 point per set, plus a win bonus (singles 4, doubles 3) or 1 each for a draw.
 const WIN_BONUS = { singles: 4, doubles: 3 };
 const DRAW_BONUS = 1;
@@ -174,6 +180,151 @@ function points(f, s) {
 
 const sameScore = (a, b) => ['hm', 'am', 'hs', 'as'].every((k) => a[k] === b[k]);
 
+// ---------- Reading the score sheet photo ----------
+
+const READ_PROMPT = `This is a photo of a Cape Town Tennis league result sheet, filled in by hand.
+Read it exactly as written. Conventions on these sheets:
+- Circled boxes mark the competition (MENS / LADIES / MIXED), format (SINGLES / DBLS / VETS) and league section (P, 1-10, A, B). If nothing is circled, return null.
+- Each numbered row is one rubber (match). Columns, left to right: home player(s), home "Match" won (1 or 0),
+  home "Sets" won, the game scores, away "Sets" won, away "Match" won, away player(s).
+- Game scores are written home side first, e.g. "6-2, 6-0". A third set may be a match tie-break such as "9-11" or "5-10".
+- A dash "–" in a Match or Sets box means 0. Doubles pairs may be written as numbers like "1+4" or just "2".
+- Where a digit has been written over, read the final (corrected) value.
+- The totals area has TOTAL PTS (home sets / home matches and away sets / away matches), BONUS PTS and FULL SCORE for each side.
+Leave out rows with nothing written in them. Use null for anything you can't read, and mention it in "unclear".`;
+
+const INT = { type: 'INTEGER', nullable: true };
+const STR = { type: 'STRING', nullable: true };
+const READ_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    date: STR,
+    competition: { type: 'STRING', enum: ['mens', 'ladies', 'mixed'], nullable: true },
+    format: { type: 'STRING', enum: ['singles', 'doubles', 'vets'], nullable: true },
+    league_section: STR,
+    home_club: STR, home_team_letter: STR, away_club: STR, away_team_letter: STR,
+    rubbers: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          number: INT, home_players: STR, away_players: STR,
+          games: { type: 'ARRAY', items: { type: 'STRING' } },
+          home_match: INT, home_sets: INT, away_sets: INT, away_match: INT,
+        },
+        required: ['number', 'games', 'home_match', 'home_sets', 'away_sets', 'away_match'],
+      },
+    },
+    totals: {
+      type: 'OBJECT',
+      properties: {
+        home_matches: INT, home_sets: INT, away_sets: INT, away_matches: INT,
+        home_bonus: INT, away_bonus: INT, home_full_score: INT, away_full_score: INT,
+      },
+    },
+    fixture_won_by: STR,
+    unclear: STR,
+  },
+  required: ['rubbers', 'totals'],
+};
+
+async function askGemini(model, mime, image) {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_KEY },
+    body: JSON.stringify({
+      contents: [{ parts: [{ inline_data: { mime_type: mime, data: image } }, { text: READ_PROMPT }] }],
+      generationConfig: { responseMimeType: 'application/json', responseSchema: READ_SCHEMA, temperature: 0 },
+    }),
+    signal: AbortSignal.timeout(READ_TIMEOUT),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(body.error?.message || `HTTP ${res.status}`), { status: res.status });
+  return JSON.parse(body.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') || 'null');
+}
+
+// Reads the photo for fixture f. The models don't always read a sheet the same way twice, so a reading that
+// doesn't add up is tried again with the next model; the first one that adds up wins. Busy or failing models are skipped.
+async function readSheet(f, dataUrl) {
+  const m = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(String(dataUrl ?? ''));
+  if (!m) throw new HttpError(400, 'Please add a photo of the score sheet.');
+  let best, last;
+  for (const model of GEMINI_MODELS) {
+    try {
+      const data = await askGemini(model, m[1], m[2]);
+      if (!data || !Array.isArray(data.rubbers)) continue;
+      const result = readResult(f, data);
+      if (!result.problems.length) return { data, model, result };
+      console.error(`Reading with ${model} didn't add up: ${result.problems.join(' ')}`);
+      if (!best || result.problems.length < best.result.problems.length) best = { data, model, result };
+    } catch (err) {
+      last = err;
+      console.error(`Reading with ${model} failed: ${err.message}`);
+    }
+  }
+  if (best) return best;
+  throw new HttpError(503, last?.status === 429 ? 'The photo reader is at its limit.' : "The photo reader didn't answer.");
+}
+
+const words = (s) => clean(s).toLowerCase().replace(/[^a-z0-9 ]/g, '');
+const clubOf = (team) => (/^(.*\S)\s+[LM][SD][A-Z]$/.exec(team)?.[1] ?? team);
+const sameClub = (a, b) => Boolean(a && b) && (a.includes(b) || b.includes(a));
+
+// Game scores one set each, whether the model gave ["6-2", "6-0"] or ["6-2, 6-0"].
+const splitGames = (games) => (games ?? []).flatMap((g) => String(g).split(/[,;/]/)).map(clean).filter(Boolean);
+
+// Sets won by each side from game scores like "6-4", "2-6", "9-11" (home first). Null if any can't be read.
+function setsFromGames(games) {
+  if (!games?.length) return null;
+  const sets = [0, 0];
+  for (const g of games) {
+    const m = /^(\d+)\s*[-–—]\s*(\d+)$/.exec(clean(g));
+    if (!m || +m[1] === +m[2]) return null;
+    sets[+m[1] > +m[2] ? 0 : 1]++;
+  }
+  return sets;
+}
+
+// Turns a reading into the fixture's result, checking each row adds up. The result comes from the rows,
+// not the totals box (which is often filled in loosely). A problem means the score shouldn't be filled in;
+// a warning is worth a second look.
+function readResult(f, data) {
+  const problems = [], warnings = [];
+  const rows = (data.rubbers ?? []).filter((r) => r && ([r.home_match, r.away_match, r.home_sets, r.away_sets].some((v) => v !== null && v !== undefined) || r.games?.length));
+  // The sheet's home side is normally the fixture's home team; swap if it's clearly written the other way round.
+  const [sh, sa, fh, fa] = [data.home_club, data.away_club, clubOf(f.home), clubOf(f.away)].map(words);
+  const flipped = fh !== fa && sameClub(sh, fa) && sameClub(sa, fh);
+  if (rows.length !== f.n) problems.push(`Found ${rows.length} matches on the sheet; this division plays ${f.n}.`);
+
+  const total = { hm: 0, am: 0, hs: 0, as: 0 };
+  rows.forEach((r, i) => {
+    const [m1, m2, s1, s2] = [r.home_match, r.away_match, r.home_sets, r.away_sets].map((v) => v ?? 0);
+    if (m1 + m2 !== 1) problems.push(`Match ${i + 1}: couldn't tell who won.`);
+    else if ((m1 ? s1 : s2) !== 2 || (m1 ? s2 : s1) > 1) problems.push(`Match ${i + 1}: sets ${s1}–${s2} don't fit the result.`);
+    const games = splitGames(r.games);
+    const g = setsFromGames(games);
+    if (games?.length && !g) warnings.push(`Match ${i + 1}: couldn't read all the game scores (${games.join(', ')}).`);
+    else if (g && (g[0] !== s1 || g[1] !== s2)) warnings.push(`Match ${i + 1}: the game scores (${games.join(', ')}) don't match the sets column.`);
+    Object.assign(total, { hm: total.hm + m1, am: total.am + m2, hs: total.hs + s1, as: total.as + s2 });
+  });
+  const t = data.totals ?? {};
+  if (t.home_sets != null && t.away_sets != null && (t.home_sets !== total.hs || t.away_sets !== total.as)) {
+    warnings.push(`The totals box says sets ${t.home_sets}–${t.away_sets}, but the matches add up to ${total.hs}–${total.as}.`);
+  }
+
+  const score = flipped ? { hm: total.am, am: total.hm, hs: total.as, as: total.hs } : total;
+  const invalid = problems.length ? null : checkScore(f, score);
+  if (invalid) problems.push(invalid);
+  const rubbers = rows.map((r) => ({
+    home: clean(r.home_players).slice(0, 80), away: clean(r.away_players).slice(0, 80),
+    games: splitGames(r.games).map((g) => g.slice(0, 12)).slice(0, 3),
+    hm: r.home_match ?? 0, hs: r.home_sets ?? 0, as: r.away_sets ?? 0, am: r.away_match ?? 0,
+  }));
+  return { score: problems.length ? null : score, problems, warnings, flipped, rubbers };
+}
+
+const reads = new Map(); // read id -> { fixtureId, at, sheet }: kept for the submission that follows
+
 // ---------- Storage ----------
 
 let db = {};
@@ -213,6 +364,7 @@ function confirmView(s, f) {
     fixtureId: s.fixtureId, division: s.division, home: s.home, away: s.away, date: s.date,
     status: s.status, side: s.side, name: s.name, at: s.createdAt, score: s.score,
     photo: `/api/photo/${s.photo}?t=${s.token}`,
+    rubbers: s.sheet?.rubbers ?? null, sheetFlipped: Boolean(s.sheet?.flipped),
     confirm: s.confirm && { name: s.confirm.name, side: s.confirm.side, at: s.confirm.at },
     official: Boolean(f?.official),
   };
@@ -280,15 +432,20 @@ async function submit(body) {
   if (prev?.status === 'approved') throw new HttpError(409, 'This result has already been approved by the league.');
   const photo = await savePhoto(f.id, body.photo);
   const now = new Date().toISOString();
+  // What was read from the photo, if anything: the game-by-game detail, and whether the captain changed the score.
+  const reading = reads.get(clean(body.readId));
+  const sheet = reading?.fixtureId === f.id
+    ? { ...reading.sheet, edited: !reading.sheet.score || !sameScore(reading.sheet.score, score) }
+    : null;
 
   // The other team submitting the same score counts as their confirmation; a different score is a dispute.
   if (prev && prev.side !== side) {
     if (sameScore(prev.score, score) && prev.status !== 'disputed') {
       prev.status = 'confirmed';
-      prev.confirm = { name: who, side, at: now, photo };
+      prev.confirm = { name: who, side, at: now, photo, sheet };
     } else {
       prev.status = 'disputed';
-      prev.disputes.push({ name: who, side, at: now, score, photo });
+      prev.disputes.push({ name: who, side, at: now, score, photo, sheet });
     }
     await save();
     return { status: prev.status, fixtureId: f.id };
@@ -297,9 +454,9 @@ async function submit(body) {
   // A new submission, or the same team correcting its own (which needs confirming again).
   const s = {
     fixtureId: f.id, division: f.division, home: f.home, away: f.away, date: f.date,
-    status: 'pending', side, name: who, score, photo, createdAt: now,
+    status: 'pending', side, name: who, score, photo, sheet, createdAt: now,
     token: prev?.token ?? newToken(), confirm: null, disputes: [],
-    history: prev ? [...prev.history, { name: prev.name, at: prev.createdAt, score: prev.score, photo: prev.photo }] : [],
+    history: prev ? [...prev.history, { name: prev.name, at: prev.createdAt, score: prev.score, photo: prev.photo, sheet: prev.sheet }] : [],
   };
   db[f.id] = s;
   await save();
@@ -317,7 +474,24 @@ async function route(req, res, url) {
   const m = (re) => re.exec(p);
   let r;
 
-  if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, submitDays: SUBMIT_DAYS });
+  if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, submitDays: SUBMIT_DAYS, read: Boolean(GEMINI_KEY) });
+
+  if (req.method === 'POST' && p === '/api/read') {
+    if (!GEMINI_KEY) throw new HttpError(501, 'Reading photos is not set up.');
+    rateLimit(req);
+    const body = await readBody(req);
+    const f = (await loadFixtures()).get(clean(body.fixtureId));
+    if (!f) throw new HttpError(404, 'That fixture is not in the results sheet.');
+    const { data, model, result } = await readSheet(f, body.photo);
+    const id = crypto.randomBytes(8).toString('base64url');
+    const now = Date.now();
+    for (const [k, v] of reads) if (now - v.at > READ_TTL) reads.delete(k);
+    reads.set(id, {
+      fixtureId: f.id, at: now,
+      sheet: { model, score: result.score, rubbers: result.rubbers, flipped: result.flipped, warnings: result.warnings, problems: result.problems, unclear: clean(data.unclear).slice(0, 300) || null },
+    });
+    return send(res, 200, { readId: id, score: result.score, problems: result.problems, warnings: result.warnings, rubbers: result.rubbers, flipped: result.flipped });
+  }
 
   if (req.method === 'GET' && p === '/api/submissions') {
     return send(res, 200, Object.values(db).map(publicView));

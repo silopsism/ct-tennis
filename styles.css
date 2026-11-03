@@ -1296,3 +1296,36 @@ button.chip.up:hover { box-shadow: inset 0 0 0 1px var(--accent); color: var(--a
   border: 1px solid var(--line);
   border-radius: 6px;
 }
+
+/* Reading the score sheet photo */
+
+.s-spin {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  vertical-align: -2px;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: s-spin .8s linear infinite;
+}
+
+@keyframes s-spin { to { transform: rotate(360deg); } }
+
+.s-warn { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: var(--draw); }
+
+.s-rubbers { margin-top: 8px; font-size: 13px; }
+
+.s-rubbers summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+
+.s-rubbers ol { margin: 6px 0 0; padding-left: 20px; }
+
+/* Names on the left, games on the right; the games drop to their own line when there isn't room. */
+.s-rubbers li > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 8px; padding: 3px 0; }
+
+.s-games { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.s-games.won { color: var(--win); font-weight: 600; }
+
+.a-sheet.bad-plain { color: var(--draw); }

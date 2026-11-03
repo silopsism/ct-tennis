@@ -1,8 +1,9 @@
 'use strict';
 
 // Captains' result submissions (only when the site is served by server.js, i.e. on salwood):
-//  - #/submit: pick your team, then the fixture, enter the score with the score editor, add a photo
-//    of the signed sheet, then send the other captain a link to confirm.
+//  - #/submit: pick your team, then the fixture, add a photo of the signed sheet (read on the server to fill
+//    in the score, when that's set up), check the score in the score editor, then send the other captain a
+//    link to confirm.
 //  - #/confirm/<fixture>/<link code>: the other captain checks the score and photo, and confirms or disputes it.
 //  - #/admin: the league admin approves submissions (needs the ADMIN_KEY set on the server).
 // Loaded before app.js and only called from it, so nothing here runs app.js code at load time.
@@ -19,7 +20,10 @@ const sub = {
   pickClub: null, // club slug while choosing a team
   fixture: null, // fixture id
   score: null, // { hm, am, hs, as }
+  scoreFrom: null, // 'photo' (read from it) or 'typed'
   photo: null, // shrunk photo as a data URL
+  canRead: false, // the server can read score sheets
+  reading: null, // 'busy', or the server's reading: { readId, score, problems, warnings, rubbers } or { error }
   name: lsGet(NAME_KEY) ?? '',
   busy: false,
   error: '',
@@ -48,9 +52,10 @@ async function api(path, { method = 'GET', body, admin } = {}) {
 // Submissions shown on the site. Without the server (GitHub Pages) there are none, and no Submit button.
 async function loadSubmissions() {
   try {
-    const list = await api('/api/submissions');
+    const [list, health] = await Promise.all([api('/api/submissions'), api('/api/health')]);
     state.api = true;
     state.subs = Object.fromEntries(list.map((s) => [s.fixtureId, s]));
+    sub.canRead = Boolean(health.read);
   } catch {
     state.api = false;
     state.subs = {};
@@ -63,7 +68,7 @@ function enterSubMode(h) {
   const route = `${h.mode}/${h.id}/${h.token}`;
   if (sub.route === route) return;
   sub.route = route;
-  if (h.mode === 'submit' && sub.done) Object.assign(sub, { fixture: null, score: null, photo: null, done: null, error: '' });
+  if (h.mode === 'submit' && sub.done) Object.assign(sub, { fixture: null, score: null, scoreFrom: null, photo: null, reading: null, done: null, error: '' });
   if (h.mode === 'confirm') {
     sub.confirm = { id: h.id, token: h.token, data: null, error: '', disputing: false, note: '', busy: false };
     loadConfirm();
@@ -105,7 +110,21 @@ function scoreLine(f, s) {
     <span class="s-detail">sets ${s.hs}–${s.as} · points ${r.homePts}–${r.awayPts}</span>`;
 }
 
-const STEPS = ['Your team', 'Fixture', 'Score', 'Photo of the score sheet', 'Send'];
+const STEPS = ['Your team', 'Fixture', 'Photo of the score sheet', 'Score', 'Send'];
+
+// League points for a score on a submission ({ division }) or fixture.
+function pointsFor(s, sc) {
+  const r = scoreFixture({ homeMatches: sc.hm, awayMatches: sc.am, homeSets: sc.hs, awaySets: sc.as, doubles: /doubles/i.test(s.division ?? '') || s.doubles });
+  return { hp: r.homePts, ap: r.awayPts };
+}
+
+// Match-by-match detail read from a score sheet, with the sheet's home side first (normally the fixture's).
+function rubbersHTML(f, rubbers, flipped = false, open = false) {
+  return `<details class="s-rubbers"${open ? ' open' : ''}><summary>Match by match</summary><ol>${rubbers.map((x) => `
+    <li><div><span>${esc(x.home || '–')} <span class="muted">v</span> ${esc(x.away || '–')}</span>
+      <span class="s-games${x.hm ? ' won' : ''}">${esc(x.games.join(', ') || '–')}</span></div></li>`).join('')}
+  </ol><p class="s-note">${esc(teamName(flipped ? f.away : f.home))} listed first. Games as written on the sheet.</p></details>`;
+}
 
 function stepHTML(n, title, body, done) {
   return `<section class="s-step${done ? ' done' : ''}"><h3><span class="s-num">${done ? '✓' : n}</span>${title}</h3>${body}</section>`;
@@ -188,20 +207,35 @@ function submitHTML() {
     ${f.submitted ? `<p class="s-note">${esc(subNote(f))} Submitting again from your team replaces your earlier entry.</p>` : ''}
     ${f.played && !f.local && !f.submitted ? '<p class="s-note">This result is already in the results sheet.</p>' : ''}`, true));
 
-  // 3. Score, with the score editor
-  parts.push(stepHTML(3, 'Score', sub.score
-    ? `<p class="s-line">${scoreLine(f, sub.score)} <button type="button" class="s-link" data-s="score">Change</button></p>`
-    : `<button type="button" class="ed-btn primary" data-s="score">Enter the score</button>`, Boolean(sub.score)));
-  if (!sub.score) return parts.join('') + laterSteps(4) + foot;
-
-  // 4. Photo of the signed score sheet
-  parts.push(stepHTML(4, 'Photo of the score sheet', `
-    ${sub.photo ? `<img class="s-photo" src="${sub.photo}" alt="Your photo of the score sheet">` : ''}
+  // 3. Photo of the signed score sheet (read on the server to fill in the score, when it can)
+  parts.push(stepHTML(3, 'Photo of the score sheet', `
+    ${sub.photo ? `<img class="s-photo" src="${sub.photo}" alt="Your photo of the score sheet">`
+      : sub.canRead ? '<p class="s-prompt">The score is read from your photo, for you to check.</p>' : ''}
+    ${sub.error && !sub.photo ? `<p class="s-error">${esc(sub.error)}</p>` : ''}
     <div class="s-actions">
       <label class="ed-btn${sub.photo ? '' : ' primary'}"><input type="file" accept="image/*" capture="environment" data-s="photo" hidden>${sub.photo ? 'Retake' : 'Take photo'}</label>
       <label class="ed-btn"><input type="file" accept="image/*" data-s="photo" hidden>Choose from gallery</label>
     </div>`, Boolean(sub.photo)));
-  if (!sub.photo) return parts.join('') + laterSteps(5) + foot;
+  if (!sub.photo) return parts.join('') + laterSteps(4) + foot;
+
+  // 4. Score: read from the photo, or entered with the score editor
+  const r = sub.reading;
+  const reading = r && r !== 'busy' ? r : null;
+  let scoreBody;
+  if (r === 'busy') {
+    scoreBody = '<p class="s-line muted"><span class="s-spin" aria-hidden="true"></span>Reading the score from your photo…</p>';
+  } else if (sub.score) {
+    scoreBody = `<p class="s-line">${scoreLine(f, sub.score)} <button type="button" class="s-link" data-s="score">Change</button></p>
+      ${sub.scoreFrom === 'photo' ? '<p class="s-note">Read from your photo. Please check it against the sheet.</p>' : ''}
+      ${reading?.warnings?.length ? `<ul class="s-warn">${reading.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
+      ${reading?.rubbers?.length ? rubbersHTML(f, reading.rubbers, reading.flipped) : ''}`;
+  } else {
+    const why = reading?.error ?? reading?.problems?.[0];
+    scoreBody = `${why ? `<p class="s-note">Couldn't read the score from the photo: ${esc(why)} Please enter it.</p>` : ''}
+      <button type="button" class="ed-btn primary" data-s="score">Enter the score</button>`;
+  }
+  parts.push(stepHTML(4, 'Score', scoreBody, Boolean(sub.score) && r !== 'busy'));
+  if (!sub.score || r === 'busy') return parts.join('') + laterSteps(5) + foot;
 
   // 5. Send
   parts.push(stepHTML(5, 'Send', `
@@ -246,7 +280,25 @@ function doneHTML() {
 const againHTML = () => '<p><button type="button" class="s-link" data-s="again">Submit another result</button></p>';
 
 function scoreEntered(f, score) {
-  sub.score = score;
+  Object.assign(sub, { score, scoreFrom: 'typed' });
+  renderPanel();
+}
+
+// Sends the photo to be read, and fills in the score if it adds up (unless the captain already typed one).
+async function readPhoto() {
+  const { fixture, photo } = sub;
+  if (sub.scoreFrom === 'photo') sub.score = null;
+  sub.reading = 'busy';
+  renderPanel();
+  let r;
+  try {
+    r = await api('/api/read', { method: 'POST', body: { fixtureId: fixture, photo } });
+  } catch (err) {
+    r = { error: err.message };
+  }
+  if (sub.photo !== photo || sub.fixture !== fixture) return; // retaken or changed meanwhile
+  sub.reading = r;
+  if (r.score && sub.scoreFrom !== 'typed') Object.assign(sub, { score: r.score, scoreFrom: 'photo' });
   renderPanel();
 }
 
@@ -283,7 +335,7 @@ async function sendSubmission() {
   Object.assign(sub, { busy: true, error: '' });
   renderPanel();
   try {
-    const reply = await api('/api/submissions', { method: 'POST', body: { fixtureId: f.id, side, name: sub.name, ...sub.score, photo: sub.photo } });
+    const reply = await api('/api/submissions', { method: 'POST', body: { fixtureId: f.id, side, name: sub.name, ...sub.score, photo: sub.photo, readId: sub.reading?.readId } });
     lsSet(NAME_KEY, sub.name);
     sub.done = { ...reply, f, side };
     await loadSubmissions();
@@ -347,6 +399,7 @@ function confirmHTML() {
     <p class="s-line muted">${esc(s.division.replace(/^Mens/, "Men's"))} · ${fmtDate(new Date(s.date), true)}</p>
     <p class="s-line">${scoreLine(f, s.score)}</p>
     <p class="s-line muted">Submitted by ${esc(s.name)} for ${esc(by)}</p>
+    ${s.rubbers?.length ? rubbersHTML(f, s.rubbers, s.sheetFlipped) : ''}
     <a href="${esc(s.photo)}" target="_blank" rel="noopener"><img class="s-photo" src="${esc(s.photo)}" alt="Photo of the score sheet"></a>
     ${action}
   </div>`;
@@ -436,6 +489,10 @@ function adminHTML() {
           <span class="s-detail">sets ${s.score.hs}–${s.score.as} · pts ${s.score.hp}–${s.score.ap}</span></p>
         <p class="s-line muted">Submitted by ${esc(s.name)} (${esc(by)}), ${when(s.createdAt)}</p>
         ${extra ? `<ul class="a-extra">${extra}</ul>` : ''}
+        ${s.sheet ? `<p class="a-sheet${s.sheet.edited ? ' bad-plain' : ''}">${s.sheet.edited
+          ? (s.sheet.score ? `Read from the photo as ${nums({ ...s.sheet.score, ...pointsFor(s, s.sheet.score) })}; the captain changed it.` : "The photo couldn't be read reliably; the captain entered the score.")
+          : 'Score read from the photo and left as read.'}</p>
+          ${s.sheet.rubbers?.length ? rubbersHTML(s, s.sheet.rubbers, s.sheet.flipped) : ''}` : ''}
         ${sheet}
         <div class="a-photos">${photos}</div>
         <div class="s-actions">
@@ -474,7 +531,7 @@ document.addEventListener('click', async (e) => {
   if (act === 'team') {
     sub.team = el.dataset.team;
     sub.pickClub = null;
-    Object.assign(sub, { fixture: null, score: null, photo: null, error: '' });
+    Object.assign(sub, { fixture: null, score: null, scoreFrom: null, photo: null, reading: null, error: '' });
     lsSet(TEAM_KEY, sub.team);
     return renderPanel();
   }
@@ -483,29 +540,29 @@ document.addEventListener('click', async (e) => {
     return renderPanel();
   }
   if (act === 'fixture') {
-    Object.assign(sub, { fixture: el.dataset.id, score: null, photo: null, error: '' });
+    Object.assign(sub, { fixture: el.dataset.id, score: null, scoreFrom: null, photo: null, reading: null, error: '' });
     return renderPanel();
   }
   if (act === 'change-fixture') {
-    Object.assign(sub, { fixture: null, score: null, photo: null, error: '' });
+    Object.assign(sub, { fixture: null, score: null, scoreFrom: null, photo: null, reading: null, error: '' });
     return renderPanel();
   }
   if (act === 'score') return openEditor(sub.fixture, sub.team, { d: fixtureDivision(sub.fixture), submit: true, start: sub.score });
   if (act === 'send') return sendSubmission();
   if (act === 'clear') {
     if ((sub.score || sub.photo) && !confirm('Clear everything you entered? Nothing has been sent.')) return;
-    Object.assign(sub, { team: null, pickClub: null, fixture: null, score: null, photo: null, error: '' });
+    Object.assign(sub, { team: null, pickClub: null, fixture: null, score: null, scoreFrom: null, photo: null, reading: null, error: '' });
     lsSet(TEAM_KEY, null);
     renderPanel();
     return $('panel').scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
   if (act === 'cancel') {
     if (!confirm('Discard this result? Nothing has been sent.')) return;
-    Object.assign(sub, { fixture: null, score: null, photo: null, error: '' });
+    Object.assign(sub, { fixture: null, score: null, scoreFrom: null, photo: null, reading: null, error: '' });
     return select(state.slug ?? defaultSlug());
   }
   if (act === 'again') {
-    Object.assign(sub, { fixture: null, score: null, photo: null, done: null, error: '' });
+    Object.assign(sub, { fixture: null, score: null, scoreFrom: null, photo: null, reading: null, done: null, error: '' });
     return renderPanel();
   }
   if (act === 'copy') {
@@ -556,7 +613,9 @@ document.addEventListener('change', async (e) => {
       sub.error = '';
     } catch (err) {
       sub.error = err.message;
+      return renderPanel();
     }
+    if (sub.canRead) return readPhoto();
     renderPanel();
   }
 });
