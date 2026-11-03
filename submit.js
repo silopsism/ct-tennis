@@ -153,11 +153,12 @@ function submitHTML() {
   // 2. Fixture: this team's fixtures from the last few days
   const now = today();
   const recent = d.fixtures.filter((f) => (f.home === team || f.away === team) && f.date && f.date <= now && daysAgo(f.date) <= SUBMIT_DAYS);
+  if (recent.length === 1) sub.fixture = recent[0].id; // usually there's just this week's: no need to pick it
   const f = sub.fixture && recent.find((x) => x.id === sub.fixture);
   if (!f) {
     const next = d.fixtures.find((x) => (x.home === team || x.away === team) && x.date && x.date > now);
     parts.push(stepHTML(2, 'Fixture', recent.length
-      ? `<p class="s-prompt">Tap the fixture you're submitting:</p>
+      ? `<p class="s-prompt">Which fixture are you submitting?</p>
         <div class="s-list">${recent.slice().reverse().map((x) => {
         const home = x.home === team;
         const status = x.submitted ? SUB_LABEL[x.submitted] : x.played && !x.local ? 'In the results sheet' : 'Not submitted yet';
@@ -173,7 +174,7 @@ function submitHTML() {
   const home = f.home === team;
   parts.push(stepHTML(2, 'Fixture', `
     <p class="s-line">${fmtDate(f.date, true)} · ${home ? 'v' : '@'} ${esc(teamName(home ? f.away : f.home))} (${home ? 'home' : 'away'})
-      <button type="button" class="s-link" data-s="change-fixture">Change</button></p>
+      ${recent.length > 1 ? '<button type="button" class="s-link" data-s="change-fixture">Change</button>' : ''}</p>
     ${f.submitted ? `<p class="s-note">${esc(subNote(f))} Submitting again from your team replaces your earlier entry.</p>` : ''}
     ${f.played && !f.local && !f.submitted ? '<p class="s-note">This result is already in the results sheet.</p>' : ''}`, true));
 
@@ -470,8 +471,7 @@ document.addEventListener('click', async (e) => {
   }
   if (act === 'fixture') {
     Object.assign(sub, { fixture: el.dataset.id, score: null, photo: null, error: '' });
-    renderPanel();
-    return openEditor(sub.fixture, sub.team, { d: fixtureDivision(sub.fixture), submit: true });
+    return renderPanel();
   }
   if (act === 'change-fixture') {
     Object.assign(sub, { fixture: null, score: null, photo: null, error: '' });
