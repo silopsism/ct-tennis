@@ -145,6 +145,10 @@ function submitHTML() {
     return parts.join('') + laterSteps(2);
   }
 
+  // Clear starts again from step 1, forgetting the team, fixture, score and photo.
+  const clear = '<button type="button" class="ed-btn" data-s="clear">Clear</button>';
+  const foot = `<div class="s-foot">${clear}</div>`;
+
   const d = teamDivision(team);
   parts.push(stepHTML(1, 'Your team', `
     <p class="s-line">${teamLabel(team)} · ${esc(leagueName(d))}
@@ -169,7 +173,7 @@ function submitHTML() {
           </button>`;
       }).join('')}</div>`
       : `<p class="s-line muted">No fixtures in the last ${SUBMIT_DAYS} days.${next ? ` Next: ${fmtDate(next.date, true)}.` : ''}</p>`));
-    return parts.join('') + laterSteps(3);
+    return parts.join('') + laterSteps(3) + foot;
   }
   const home = f.home === team;
   parts.push(stepHTML(2, 'Fixture', `
@@ -182,7 +186,7 @@ function submitHTML() {
   parts.push(stepHTML(3, 'Score', sub.score
     ? `<p class="s-line">${scoreLine(f, sub.score)} <button type="button" class="s-link" data-s="score">Change</button></p>`
     : `<button type="button" class="ed-btn primary" data-s="score">Enter the score</button>`, Boolean(sub.score)));
-  if (!sub.score) return parts.join('') + laterSteps(4);
+  if (!sub.score) return parts.join('') + laterSteps(4) + foot;
 
   // 4. Photo of the signed score sheet
   parts.push(stepHTML(4, 'Photo of the score sheet', `
@@ -191,7 +195,7 @@ function submitHTML() {
       <label class="ed-btn${sub.photo ? '' : ' primary'}"><input type="file" accept="image/*" capture="environment" data-s="photo" hidden>${sub.photo ? 'Retake' : 'Take photo'}</label>
       <label class="ed-btn"><input type="file" accept="image/*" data-s="photo" hidden>Choose from gallery</label>
     </div>`, Boolean(sub.photo)));
-  if (!sub.photo) return parts.join('') + laterSteps(5);
+  if (!sub.photo) return parts.join('') + laterSteps(5) + foot;
 
   // 5. Send
   parts.push(stepHTML(5, 'Send', `
@@ -199,7 +203,10 @@ function submitHTML() {
       <input type="text" id="s-name" autocomplete="name" maxlength="60" value="${esc(sub.name)}" placeholder="Captain's name">
     </label>
     ${sub.error ? `<p class="s-error">${esc(sub.error)}</p>` : ''}
-    <button type="button" class="ed-btn primary" data-s="send" ${sub.busy ? 'disabled' : ''}>${sub.busy ? 'Sending…' : 'Submit result'}</button>
+    <div class="s-actions">
+      <button type="button" class="ed-btn primary" data-s="send" ${sub.busy ? 'disabled' : ''}>${sub.busy ? 'Sending…' : 'Submit result'}</button>
+      ${sub.busy ? '' : clear}
+    </div>
     <p class="s-note">The other captain then confirms it. It shows on this site straight away, marked as submitted, until it's in the results sheet.</p>`));
   return parts.join('');
 }
@@ -479,6 +486,18 @@ document.addEventListener('click', async (e) => {
   }
   if (act === 'score') return openEditor(sub.fixture, sub.team, { d: fixtureDivision(sub.fixture), submit: true, start: sub.score });
   if (act === 'send') return sendSubmission();
+  if (act === 'clear') {
+    if ((sub.score || sub.photo) && !confirm('Clear everything you entered? Nothing has been sent.')) return;
+    Object.assign(sub, { team: null, pickClub: null, fixture: null, score: null, photo: null, error: '' });
+    lsSet(TEAM_KEY, null);
+    renderPanel();
+    return $('panel').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+  if (act === 'cancel') {
+    if (!confirm('Discard this result? Nothing has been sent.')) return;
+    Object.assign(sub, { fixture: null, score: null, photo: null, error: '' });
+    return select(state.slug ?? defaultSlug());
+  }
   if (act === 'again') {
     Object.assign(sub, { fixture: null, score: null, photo: null, done: null, error: '' });
     return renderPanel();
