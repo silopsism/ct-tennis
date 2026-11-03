@@ -1153,6 +1153,14 @@ button.chip.up:hover { box-shadow: inset 0 0 0 1px var(--accent); color: var(--a
 
 .s-step.done .s-num { background: var(--accent-soft); color: var(--accent); }
 
+.s-step.later { padding-top: 10px; padding-bottom: 10px; }
+
+.s-step.later h3 { margin: 0; color: var(--faint); font-weight: 600; }
+
+.s-step.later .s-num { background: none; color: var(--faint); box-shadow: inset 0 0 0 1.5px var(--line); }
+
+.s-prompt { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+
 .s-line { margin: 0 0 4px; }
 
 .s-line.muted, .muted { color: var(--muted); font-size: 14px; }

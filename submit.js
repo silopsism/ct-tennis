@@ -105,8 +105,16 @@ function scoreLine(f, s) {
     <span class="s-detail">sets ${s.hs}–${s.as} · points ${r.homePts}–${r.awayPts}</span>`;
 }
 
+const STEPS = ['Your team', 'Fixture', 'Score', 'Photo of the score sheet', 'Send'];
+
 function stepHTML(n, title, body, done) {
   return `<section class="s-step${done ? ' done' : ''}"><h3><span class="s-num">${done ? '✓' : n}</span>${title}</h3>${body}</section>`;
+}
+
+// The steps still to come, greyed out, so it's clear what happens next.
+function laterSteps(from) {
+  return STEPS.slice(from - 1).map((title, i) => `
+    <section class="s-step later" aria-hidden="true"><h3><span class="s-num">${from + i}</span>${title}</h3></section>`).join('');
 }
 
 // ---------- Submit ----------
@@ -129,11 +137,12 @@ function submitHTML() {
           ${clubs.map((c) => `<option value="${c.slug}"${c === picked ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}
         </select>
       </label>
-      ${picked ? `<div class="s-list">${picked.teams.map((t) => `
+      ${picked ? `<p class="s-prompt">Tap your team:</p>
+        <div class="s-list">${picked.teams.map((t) => `
         <button type="button" class="s-item" data-s="team" data-team="${esc(t.team)}">
-          <span>${esc(leagueName(t.d))}</span><span class="code">${esc(t.code)}</span>
+          <span>${esc(leagueName(t.d))}</span><span class="s-status">${esc(t.code)}<span class="chev" aria-hidden="true">›</span></span>
         </button>`).join('')}</div>` : ''}`));
-    return parts.join('');
+    return parts.join('') + laterSteps(2);
   }
 
   const d = teamDivision(team);
@@ -148,17 +157,18 @@ function submitHTML() {
   if (!f) {
     const next = d.fixtures.find((x) => (x.home === team || x.away === team) && x.date && x.date > now);
     parts.push(stepHTML(2, 'Fixture', recent.length
-      ? `<div class="s-list">${recent.slice().reverse().map((x) => {
+      ? `<p class="s-prompt">Tap the fixture you're submitting:</p>
+        <div class="s-list">${recent.slice().reverse().map((x) => {
         const home = x.home === team;
         const status = x.submitted ? SUB_LABEL[x.submitted] : x.played && !x.local ? 'In the results sheet' : 'Not submitted yet';
         return `
           <button type="button" class="s-item" data-s="fixture" data-id="${esc(x.id)}">
             <span>${fmtDate(x.date, true)} · ${home ? 'v' : '@'} ${esc(teamName(home ? x.away : x.home))}</span>
-            <span class="s-status">${status}</span>
+            <span class="s-status">${status}<span class="chev" aria-hidden="true">›</span></span>
           </button>`;
       }).join('')}</div>`
       : `<p class="s-line muted">No fixtures in the last ${SUBMIT_DAYS} days.${next ? ` Next: ${fmtDate(next.date, true)}.` : ''}</p>`));
-    return parts.join('');
+    return parts.join('') + laterSteps(3);
   }
   const home = f.home === team;
   parts.push(stepHTML(2, 'Fixture', `
@@ -171,7 +181,7 @@ function submitHTML() {
   parts.push(stepHTML(3, 'Score', sub.score
     ? `<p class="s-line">${scoreLine(f, sub.score)} <button type="button" class="s-link" data-s="score">Change</button></p>`
     : `<button type="button" class="ed-btn primary" data-s="score">Enter the score</button>`, Boolean(sub.score)));
-  if (!sub.score) return parts.join('');
+  if (!sub.score) return parts.join('') + laterSteps(4);
 
   // 4. Photo of the signed score sheet
   parts.push(stepHTML(4, 'Photo of the score sheet', `
@@ -180,7 +190,7 @@ function submitHTML() {
       <label class="ed-btn${sub.photo ? '' : ' primary'}"><input type="file" accept="image/*" capture="environment" data-s="photo" hidden>${sub.photo ? 'Retake' : 'Take photo'}</label>
       <label class="ed-btn"><input type="file" accept="image/*" data-s="photo" hidden>Choose from gallery</label>
     </div>`, Boolean(sub.photo)));
-  if (!sub.photo) return parts.join('');
+  if (!sub.photo) return parts.join('') + laterSteps(5);
 
   // 5. Send
   parts.push(stepHTML(5, 'Send', `
