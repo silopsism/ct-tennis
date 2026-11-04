@@ -221,9 +221,11 @@ function submitHTML() {
   // 4. Score: read from the photo, or entered with the score editor
   const r = sub.reading;
   const reading = r && r !== 'busy' ? r : null;
+  const busy = r === 'busy' && !sub.score; // a score typed while the photo is being read wins
   let scoreBody;
-  if (r === 'busy') {
-    scoreBody = '<p class="s-line muted"><span class="s-spin" aria-hidden="true"></span>Reading the score from your photo…</p>';
+  if (busy) {
+    scoreBody = `<p class="s-line muted"><span class="s-spin" aria-hidden="true"></span>Reading the score from your photo…</p>
+      <p class="s-note">Usually a few seconds. <button type="button" class="s-link" data-s="score">Enter it myself</button></p>`;
   } else if (sub.score) {
     scoreBody = `<p class="s-line">${scoreLine(f, sub.score)} <button type="button" class="s-link" data-s="score">Change</button></p>
       ${sub.scoreFrom === 'photo' ? '<p class="s-note">Read from your photo. Please check it against the sheet.</p>' : ''}
@@ -234,8 +236,8 @@ function submitHTML() {
     scoreBody = `${why ? `<p class="s-note">Couldn't read the score from the photo: ${esc(why)} Please enter it.</p>` : ''}
       <button type="button" class="ed-btn primary" data-s="score">Enter the score</button>`;
   }
-  parts.push(stepHTML(4, 'Score', scoreBody, Boolean(sub.score) && r !== 'busy'));
-  if (!sub.score || r === 'busy') return parts.join('') + laterSteps(5) + foot;
+  parts.push(stepHTML(4, 'Score', scoreBody, Boolean(sub.score)));
+  if (!sub.score) return parts.join('') + laterSteps(5) + foot;
 
   // 5. Send
   parts.push(stepHTML(5, 'Send', `

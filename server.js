@@ -25,10 +25,10 @@ const MAX_PHOTO = 8 * 1024 * 1024;
 const POSTS_PER_HOUR = 30; // per IP address
 const SAST_OFFSET = 2 * 60 * 60 * 1000;
 
-// Reading score sheets from the photo (optional: off unless GEMINI_API_KEY is set). Tried in order when one is busy.
+// Reading score sheets from the photo (optional: off unless GEMINI_API_KEY is set). These models are all asked at once.
 const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
-const GEMINI_MODELS = (process.env.GEMINI_MODELS || 'gemini-flash-lite-latest,gemini-3.5-flash-lite').split(',').map((m) => m.trim());
-const READ_TIMEOUT = 25 * 1000;
+const GEMINI_MODELS = (process.env.GEMINI_MODELS || 'gemini-flash-lite-latest,gemini-3.5-flash-lite,gemini-3.1-flash-lite').split(',').map((m) => m.trim());
+const READ_TIMEOUT = 20 * 1000; // overall: after this the captain types the score
 const READ_TTL = 2 * 60 * 60 * 1000; // a reading is kept this long for the submission that follows it
 
 // Scoring Rules tab: 1 point per set, plus a win bonus (singles 4, doubles 3) or 1 each for a draw.
@@ -228,7 +228,7 @@ const READ_SCHEMA = {
   required: ['rubbers', 'totals'],
 };
 
-async function askGemini(model, mime, image) {
+async function askGemini(model, mime, image, signal) {
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_KEY },
@@ -236,34 +236,59 @@ async function askGemini(model, mime, image) {
       contents: [{ parts: [{ inline_data: { mime_type: mime, data: image } }, { text: READ_PROMPT }] }],
       generationConfig: { responseMimeType: 'application/json', responseSchema: READ_SCHEMA, temperature: 0 },
     }),
-    signal: AbortSignal.timeout(READ_TIMEOUT),
+    signal,
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(body.error?.message || `HTTP ${res.status}`), { status: res.status });
   return JSON.parse(body.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') || 'null');
 }
 
-// Reads the photo for fixture f. The models don't always read a sheet the same way twice, so a reading that
-// doesn't add up is tried again with the next model; the first one that adds up wins. Busy or failing models are skipped.
-async function readSheet(f, dataUrl) {
+// Reads the photo for fixture f. All the models are asked at once (free-tier models are often busy, and they don't
+// always read a sheet the same way twice): the first reading that adds up wins and the rest are dropped. If none
+// adds up within READ_TIMEOUT, the closest one is returned so the captain can see what went wrong.
+function readSheet(f, dataUrl) {
   const m = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(String(dataUrl ?? ''));
   if (!m) throw new HttpError(400, 'Please add a photo of the score sheet.');
-  let best, last;
-  for (const model of GEMINI_MODELS) {
-    try {
-      const data = await askGemini(model, m[1], m[2]);
-      if (!data || !Array.isArray(data.rubbers)) continue;
-      const result = readResult(f, data);
-      if (!result.problems.length) return { data, model, result };
-      console.error(`Reading with ${model} didn't add up: ${result.problems.join(' ')}`);
-      if (!best || result.problems.length < best.result.problems.length) best = { data, model, result };
-    } catch (err) {
-      last = err;
-      console.error(`Reading with ${model} failed: ${err.message}`);
+  const started = Date.now();
+  const stop = new AbortController();
+  const timer = setTimeout(() => stop.abort(new Error('No answer in time')), READ_TIMEOUT);
+  let done = false, best = null, last = null, pending = GEMINI_MODELS.length;
+
+  return new Promise((resolve, reject) => {
+    const finish = () => {
+      clearTimeout(timer);
+      if (best) resolve(best);
+      else {
+        const why = last?.status === 429 ? 'The photo reader is at its limit.'
+          : stop.signal.aborted ? "The photo reader didn't answer in time."
+          : "The photo reader isn't available right now.";
+        reject(new HttpError(503, why));
+      }
+    };
+    for (const model of GEMINI_MODELS) {
+      askGemini(model, m[1], m[2], stop.signal).then((data) => {
+        if (done) return;
+        const secs = ((Date.now() - started) / 1000).toFixed(1);
+        if (!data || !Array.isArray(data.rubbers)) throw new Error('No reading in the answer');
+        const result = readResult(f, data);
+        console.log(`Read ${f.id} with ${model} in ${secs}s: ${result.problems.length ? `didn't add up (${result.problems.join(' ')})` : 'ok'}`);
+        if (!best || result.problems.length < best.result.problems.length) best = { data, model, result };
+        if (!result.problems.length) {
+          done = true;
+          stop.abort(new Error('Another model answered first'));
+          finish();
+        }
+      }).catch((err) => {
+        last = err;
+        if (!done) console.error(`Reading ${f.id} with ${model} failed after ${((Date.now() - started) / 1000).toFixed(1)}s: ${err.message}`);
+      }).finally(() => {
+        if (--pending === 0 && !done) {
+          done = true;
+          finish();
+        }
+      });
     }
-  }
-  if (best) return best;
-  throw new HttpError(503, last?.status === 429 ? 'The photo reader is at its limit.' : "The photo reader didn't answer.");
+  });
 }
 
 const words = (s) => clean(s).toLowerCase().replace(/[^a-z0-9 ]/g, '');
