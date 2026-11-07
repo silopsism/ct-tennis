@@ -9,7 +9,11 @@
 const COURT_HOURS = [11, 12, 13, 14, 15, 16, 17, 18]; // match days, 11am to 6pm
 const SAST = 2; // UTC+2 all year
 const FORECAST_DAYS = 15; // Open-Meteo forecasts 16 days, today included
-const WIND_KEY = 'ctt-wind-v3';
+// Saved forecasts hold only the match hours, so the key names them: changing the hours drops the old ones.
+const WIND_KEY = `ctt-wind-v3-${COURT_HOURS[0]}-${COURT_HOURS[COURT_HOURS.length - 1]}`;
+try {
+  for (const k of Object.keys(localStorage)) if (k.startsWith('ctt-wind-') && k !== WIND_KEY) localStorage.removeItem(k);
+} catch { /* storage unavailable */ }
 const OPEN_WATER = { lat: -34.30, lon: 18.60 }; // the terrain model's inflow point, in False Bay
 const WIND_TTL = 60 * 60 * 1000;
 const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
