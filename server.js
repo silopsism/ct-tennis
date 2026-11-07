@@ -419,6 +419,19 @@ try { clubDb = { ...clubDb, ...JSON.parse(fs.readFileSync(CLUBS_FILE, 'utf8')) }
 let RESEARCH = {};
 try { RESEARCH = JSON.parse(fs.readFileSync(path.join(ROOT, 'club-facts.json'), 'utf8')); } catch { /* none yet */ }
 
+// Banner photo addresses carry a fingerprint of the file ("club-photos/gardens.jpg?v=3f9c…"), like the CSS and JS,
+// so a replaced photo shows at once instead of the copy browsers and Cloudflare kept.
+const photoHashes = new Map();
+function photoSrc(slug) {
+  if (!photoHashes.has(slug)) {
+    let v = '';
+    try { v = crypto.createHash('sha1').update(fs.readFileSync(path.join(ROOT, 'club-photos', `${slug}.jpg`))).digest('hex').slice(0, 10); } catch { /* missing */ }
+    photoHashes.set(slug, v);
+  }
+  const v = photoHashes.get(slug);
+  return `club-photos/${slug}.jpg${v ? `?v=${v}` : ''}`;
+}
+
 let clubWriting = Promise.resolve();
 function saveClubs() {
   const json = JSON.stringify(clubDb, null, 1);
@@ -483,7 +496,7 @@ function clubSummaries() {
       address: x.address ?? null, website: x.website ?? null, facebook: x.facebook ?? null,
       notes: clubDb.research[slug] === 'approved' ? x.notes || null : null,
       // focus: which part of the photo the banner crop keeps (CSS object-position, e.g. "50% 80%").
-      photo: x.photo ? { src: `club-photos/${slug}.jpg`, page: x.photo.page ?? null, focus: x.photo.focus ?? null } : null,
+      photo: x.photo ? { src: photoSrc(slug), page: x.photo.page ?? null, focus: x.photo.focus ?? null } : null,
     };
   }
   for (const [slug, s] of Object.entries(clubDb.summaries)) get(slug).summary = s.text;
@@ -793,7 +806,9 @@ const server = http.createServer(async (req, res) => {
     if (photo && (req.method === 'GET' || req.method === 'HEAD')) {
       const data = await fs.promises.readFile(path.join(ROOT, 'club-photos', `${photo[1]}.jpg`)).catch(() => null);
       if (!data) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('Not found'); }
-      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
+      // Fingerprinted addresses never change, so they can be kept; a bare address is checked each time.
+      const cache = url.searchParams.has('v') ? 'public, max-age=31536000, immutable' : 'no-cache';
+      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': cache });
       return res.end(req.method === 'HEAD' ? undefined : data);
     }
     const file = STATIC[url.pathname];
