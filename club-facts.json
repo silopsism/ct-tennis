@@ -60,6 +60,12 @@
     "value": true,
     "source": "https://playtomic.com/clubs/africa-padel-at-the-bay-hotel"
    }
+  },
+  "photo": {
+   "url": null,
+   "page": null,
+   "shows": "courts with the clubhouse and Table Mountain behind; supplied by the league",
+   "focus": "65% 55%"
   }
  },
  "chrismar": {
@@ -151,9 +157,10 @@
   "notes": "",
   "facilities": {},
   "photo": {
-   "url": "https://constantiatennisclub.co.za/wp-content/uploads/2022/08/banner_narrow-scaled.jpg",
-   "page": "https://constantiatennisclub.co.za/",
-   "shows": "panorama of the courts and the corner of the clubhouse/pavilion, with a strong sun flare (2560x1440; the home page banner for tablet screens)"
+   "url": null,
+   "page": null,
+   "shows": "aerial view of the clubhouse and courts; supplied by the league",
+   "focus": "40% 50%"
   }
  },
  "cput": {
@@ -185,9 +192,10 @@
    }
   },
   "photo": {
-   "url": "https://edgemeadtennis.net.za/wp-content/uploads/2024/01/banner1.jpg",
-   "page": "https://edgemeadtennis.net.za/about/",
-   "shows": "front of the clubhouse with the 'Edgemead Tennis Club' sign (800x600)"
+   "url": null,
+   "page": null,
+   "shows": "tournament show court with the clubhouse behind; supplied by the league",
+   "focus": "50% 30%"
   }
  },
  "eversdal": {
@@ -232,9 +240,9 @@
    }
   },
   "photo": {
-   "url": "https://fhtc.co.za/wp-content/uploads/2026/02/FHTC-Clubhouse-Exterior.jpeg",
-   "page": "https://fhtc.co.za/",
-   "shows": "clubhouse veranda and stand with members watching the courts (1600x1069; alt 'FHTC Clubhouse Exterior')"
+   "url": "https://fhtc.co.za/wp-content/uploads/2026/06/FHTC-Hero-2048x1152.jpg",
+   "page": "https://fhtc.co.za/fhtc-club-champs-2026/",
+   "shows": "wide view across the courts to the clubhouse and mountain (club home page)"
   }
  },
  "fresnaye": {
@@ -292,9 +300,9 @@
    }
   },
   "photo": {
-   "url": "https://gardenslawntennisclub.co.za/wp-content/uploads/2024/09/Pierreclub-scaled.jpg",
-   "page": "https://gardenslawntennisclub.co.za/",
-   "shows": "clubhouse behind the courts, palms and Table Mountain; one player in the foreground (2560x2260)",
+   "url": null,
+   "page": null,
+   "shows": "court with the clubhouse and palms behind; supplied by the league",
    "focus": "50% 60%"
   }
  },
@@ -485,9 +493,10 @@
    }
   },
   "photo": {
-   "url": "https://meadowridgetennisclub.co.za/wordpress/wp-content/gallery/club-photos/Club.jpg",
-   "page": "https://meadowridgetennisclub.co.za/club-info/facilities/",
-   "shows": "front of the clubhouse with the Meadowridge Tennis Club sign (2500x1656)"
+   "url": null,
+   "page": null,
+   "shows": "courts in play with the clubhouse behind; supplied by the league",
+   "focus": "62% 60%"
   }
  },
  "milnerton": {
@@ -505,6 +514,12 @@
     "value": true,
     "source": "https://milnertontennis.yolasite.com/"
    }
+  },
+  "photo": {
+   "url": null,
+   "page": null,
+   "shows": "courts with the clubhouse behind; supplied by the league",
+   "focus": "55% 50%"
   }
  },
  "mitchells-plain": {
@@ -555,7 +570,13 @@
   "website": null,
   "facebook": null,
   "notes": "",
-  "facilities": {}
+  "facilities": {},
+  "photo": {
+   "url": null,
+   "page": null,
+   "shows": "courts in play with Gardens buildings and Signal Hill behind; supplied by the league",
+   "focus": "50% 55%"
+  }
  },
  "parow": {
   "name": "Parow",
@@ -644,6 +665,12 @@
     "value": true,
     "source": "https://playtomic.com/clubs/atlantic-padel-table-view"
    }
+  },
+  "photo": {
+   "url": null,
+   "page": null,
+   "shows": "aerial view of the Table View courts, clubhouse and padel courts; supplied by the league",
+   "focus": "50% 50%"
   }
  },
  "uct": {
@@ -657,6 +684,12 @@
     "value": true,
     "source": "https://sport.uct.ac.za/tennis"
    }
+  },
+  "photo": {
+   "url": null,
+   "page": null,
+   "shows": "UCT Tennis Club clubhouse and terrace with the mountain behind; supplied by the league",
+   "focus": "55% 50%"
   }
  },
  "uwc": {
@@ -678,7 +711,13 @@
   "website": null,
   "facebook": null,
   "notes": "Restaurant and a padel court at the club.",
-  "facilities": {}
+  "facilities": {},
+  "photo": {
+   "url": null,
+   "page": null,
+   "shows": "covered terrace looking out over the courts; supplied by the league",
+   "focus": "60% 45%"
+  }
  },
  "wpcc": {
   "name": "WPCC",
@@ -693,9 +732,10 @@
    }
   },
   "photo": {
-   "url": "https://images.squarespace-cdn.com/content/v1/6849780be21b7339bd41f8cb/1769605850605-ZOY4CM1KAS83TEBSWUIB/DSC_2298.JPG?format=2500w",
-   "page": "https://www.wpcc.co.za/tennis",
-   "shows": "WPCC tennis courts with players and Table Mountain behind (2500w)"
+   "url": null,
+   "page": null,
+   "shows": "courts in play with Table Mountain behind; supplied by the league",
+   "focus": "50% 55%"
   }
  },
  "wynberg": {
