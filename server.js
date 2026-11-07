@@ -41,13 +41,16 @@ const STATIC = {
   '/styles.css': ['styles.css', 'text/css; charset=utf-8'],
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
   '/submit.js': ['submit.js', 'text/javascript; charset=utf-8'],
+  '/ratings.js': ['ratings.js', 'text/javascript; charset=utf-8'],
+  '/conditions.js': ['conditions.js', 'text/javascript; charset=utf-8'],
+  '/courts.json': ['courts.json', 'application/json; charset=utf-8'],
 };
 
 fs.mkdirSync(PHOTO_DIR, { recursive: true });
 
 // The page links each file with a fingerprint of its contents ("app.js?v=3f9c…"). Phones can then keep the
 // files cached, and still fetch a new copy as soon as a deploy changes one, with no refresh needed.
-const ASSETS = ['styles.css', 'submit.js', 'app.js'];
+const ASSETS = ['styles.css', 'submit.js', 'ratings.js', 'conditions.js', 'app.js'];
 
 async function indexHTML() {
   let html = await fs.promises.readFile(path.join(ROOT, 'index.html'), 'utf8');
@@ -395,6 +398,134 @@ function confirmView(s, f) {
   };
 }
 
+// ---------- Club ratings ----------
+// Away captains rate the club they played at, after submitting or confirming a result: stars and a vibe count at
+// once; a comment and any facilities they tick wait for the admin. Kept in DATA_DIR/clubs.json.
+
+const CLUBS_FILE = path.join(DATA_DIR, 'clubs.json');
+const FACILITIES = ['practice_wall', 'shop', 'floodlights', 'change_rooms', 'parking', 'bar', 'braai', 'kids',
+  'ball_machine', 'coaching', 'cards', 'wheelchair'];
+const STARS = ['kitchen', 'courts', 'shade', 'seating', 'hospitality']; // kitchen 0 = no kitchen
+const COMMENTS_SHOWN = 8;
+
+const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+let clubDb = { tickets: {}, ratings: {}, facts: {}, summaries: {}, research: {} };
+try { clubDb = { ...clubDb, ...JSON.parse(fs.readFileSync(CLUBS_FILE, 'utf8')) }; } catch { /* first run */ }
+
+// Researched club details (club-facts.json, in the repo): address and links show straight away; the facilities found
+// (each with its source) wait on the admin page like a captain's, and approving one never overrides a captain's answer.
+// clubDb.research records the admin's decision per club: 'approved' or 'removed'.
+let RESEARCH = {};
+try { RESEARCH = JSON.parse(fs.readFileSync(path.join(ROOT, 'club-facts.json'), 'utf8')); } catch { /* none yet */ }
+
+let clubWriting = Promise.resolve();
+function saveClubs() {
+  const json = JSON.stringify(clubDb, null, 1);
+  clubWriting = clubWriting.then(async () => {
+    const tmp = `${CLUBS_FILE}.tmp`;
+    await fs.promises.writeFile(tmp, json);
+    await fs.promises.rename(tmp, CLUBS_FILE);
+  }).catch((err) => console.error('Saving club ratings failed', err));
+  return clubWriting;
+}
+
+// A ticket for the away team to rate the home club, one per fixture: rating again replaces the earlier one.
+function rateTicket(f) {
+  const found = Object.entries(clubDb.tickets).find(([, t]) => t.fixtureId === f.id);
+  if (found) return { rateTicket: found[0], rateClub: found[1].name };
+  const ticket = crypto.randomBytes(9).toString('base64url');
+  const name = clubOf(f.home);
+  clubDb.tickets[ticket] = { fixtureId: f.id, club: slugify(name), name, away: f.away, division: f.division, date: f.date, at: new Date().toISOString() };
+  saveClubs();
+  return { rateTicket: ticket, rateClub: name };
+}
+
+function rate(body) {
+  const t = clubDb.tickets[clean(body.ticket)];
+  if (!t) throw new HttpError(404, 'This rating link is not valid.');
+  const stars = {};
+  for (const k of STARS) {
+    const v = Number(body.stars?.[k]);
+    if (Number.isInteger(v) && v >= (k === 'kitchen' ? 0 : 1) && v <= 3) stars[k] = v;
+  }
+  const vibe = [1, 2, 3].includes(Number(body.vibe)) ? Number(body.vibe) : null;
+  const ticks = {};
+  for (const k of FACILITIES) if (typeof body.ticks?.[k] === 'boolean') ticks[k] = body.ticks[k];
+  const comment = clean(body.comment).slice(0, 300);
+  if (!Object.keys(stars).length && !vibe && !Object.keys(ticks).length && !comment) throw new HttpError(400, 'Nothing to send yet.');
+  clubDb.ratings[clean(body.ticket)] = {
+    club: t.club, name: t.name, fixtureId: t.fixtureId, away: t.away, division: t.division, date: t.date,
+    stars, vibe, ticks, comment, at: new Date().toISOString(),
+    reviewed: !comment && !Object.keys(ticks).length, // nothing for the admin to check
+  };
+  return saveClubs();
+}
+
+// What the club pages show: averages of every rating, facilities and comments once the admin has approved them.
+function clubSummaries() {
+  const out = {};
+  const get = (slug) => (out[slug] ??= { n: 0, stars: {}, noKitchen: 0, vibe: { sum: 0, n: 0 }, facilities: {}, comments: [], summary: null });
+  for (const r of Object.values(clubDb.ratings)) {
+    const c = get(r.club);
+    c.n++;
+    for (const [k, v] of Object.entries(r.stars)) {
+      if (k === 'kitchen' && v === 0) { c.noKitchen++; continue; }
+      const s = (c.stars[k] ??= { sum: 0, n: 0 });
+      s.sum += v; s.n++;
+    }
+    if (r.vibe) { c.vibe.sum += r.vibe; c.vibe.n++; }
+    if (r.reviewed && r.comment) c.comments.push({ text: r.comment, at: r.at });
+  }
+  for (const [slug, facts] of Object.entries(clubDb.facts)) get(slug).facilities = Object.fromEntries(Object.entries(facts).map(([k, v]) => [k, v.value]));
+  for (const [slug, x] of Object.entries(RESEARCH)) {
+    get(slug).info = {
+      address: x.address ?? null, website: x.website ?? null, facebook: x.facebook ?? null,
+      notes: clubDb.research[slug] === 'approved' ? x.notes || null : null,
+      // focus: which part of the photo the banner crop keeps (CSS object-position, e.g. "50% 80%").
+      photo: x.photo ? { src: `club-photos/${slug}.jpg`, page: x.photo.page ?? null, focus: x.photo.focus ?? null } : null,
+    };
+  }
+  for (const [slug, s] of Object.entries(clubDb.summaries)) get(slug).summary = s.text;
+  for (const c of Object.values(out)) {
+    c.comments = c.comments.sort((a, b) => b.at.localeCompare(a.at)).slice(0, COMMENTS_SHOWN).map((x) => ({ text: x.text, at: x.at.slice(0, 10) }));
+    c.stars = Object.fromEntries(Object.entries(c.stars).map(([k, s]) => [k, { avg: +(s.sum / s.n).toFixed(2), n: s.n }]));
+    c.vibe = c.vibe.n ? { avg: +(c.vibe.sum / c.vibe.n).toFixed(2), n: c.vibe.n } : null;
+  }
+  return out;
+}
+
+// One friendly line summing up a club's approved comments, written by Gemini (when it's set up).
+async function summarise(slug) {
+  if (!GEMINI_KEY) return;
+  const comments = Object.values(clubDb.ratings).filter((r) => r.club === slug && r.reviewed && r.comment)
+    .sort((a, b) => b.at.localeCompare(a.at)).slice(0, 30).map((r) => `- ${r.comment}`);
+  if (!comments.length) { delete clubDb.summaries[slug]; return saveClubs(); }
+  const prompt = `These are comments from visiting tennis league players about a tennis club in Cape Town.
+Write ONE short, friendly line (at most 15 words) summing up what visitors say about the club's vibe and facilities.
+Plain text, no quotes, no names of people, no emoji. Mention only what the comments say.
+
+${comments.join('\n')}`;
+  for (const model of GEMINI_MODELS) {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_KEY },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.4 } }),
+        signal: AbortSignal.timeout(20000),
+      });
+      const body = await res.json().catch(() => ({}));
+      const text = clean(body.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('')).replace(/^["“]|["”]$/g, '').slice(0, 160);
+      if (res.ok && text) {
+        clubDb.summaries[slug] = { text, at: new Date().toISOString(), n: comments.length };
+        return saveClubs();
+      }
+    } catch (err) {
+      console.error(`Summarising ${slug} with ${model} failed`, err.message);
+    }
+  }
+}
+
 // ---------- HTTP ----------
 
 class HttpError extends Error {
@@ -473,7 +604,7 @@ async function submit(body) {
       prev.disputes.push({ name: who, side, at: now, score, photo, sheet });
     }
     await save();
-    return { status: prev.status, fixtureId: f.id };
+    return { status: prev.status, fixtureId: f.id, ...(side === 'away' ? rateTicket(f) : {}) };
   }
 
   // A new submission, or the same team correcting its own (which needs confirming again).
@@ -485,7 +616,7 @@ async function submit(body) {
   };
   db[f.id] = s;
   await save();
-  return { status: s.status, fixtureId: f.id, token: s.token };
+  return { status: s.status, fixtureId: f.id, token: s.token, ...(side === 'away' ? rateTicket(f) : {}) };
 }
 
 function byToken(id, token) {
@@ -550,7 +681,17 @@ async function route(req, res, url) {
       s.disputes.push({ name: who, side, at: now, note: clean(body.note).slice(0, 500) });
     }
     await save();
-    return send(res, 200, { status: s.status });
+    // The away captain can rate the home club they just played at.
+    const f = side === 'away' ? (await loadFixtures().catch(() => new Map())).get(s.fixtureId) : null;
+    return send(res, 200, { status: s.status, ...(f ? rateTicket(f) : {}) });
+  }
+
+  if (req.method === 'GET' && p === '/api/clubs') return send(res, 200, clubSummaries());
+
+  if (req.method === 'POST' && p === '/api/ratings') {
+    rateLimit(req);
+    await rate(await readBody(req));
+    return send(res, 200, { ok: true });
   }
 
   if (req.method === 'GET' && (r = m(/^\/api\/photo\/([\w.-]+)$/))) {
@@ -580,6 +721,52 @@ async function route(req, res, url) {
       return send(res, 200, list.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
     }
 
+    // Ratings with a comment or facilities to check, newest first, with what's on record for those facilities.
+    if (req.method === 'GET' && p === '/api/admin/ratings') {
+      const current = (club, ticks) => Object.fromEntries(Object.keys(ticks).map((k) => [k, clubDb.facts[club]?.[k]?.value ?? null]));
+      const list = Object.entries(clubDb.ratings).filter(([, x]) => !x.reviewed)
+        .map(([id, x]) => ({ id, ...x, current: current(x.club, x.ticks) }))
+        .sort((a, b) => b.at.localeCompare(a.at));
+      // Researched facilities not yet decided, after the captains' ratings.
+      for (const [slug, x] of Object.entries(RESEARCH)) {
+        if (clubDb.research[slug] || (!Object.keys(x.facilities ?? {}).length && !x.notes)) continue;
+        const ticks = Object.fromEntries(Object.entries(x.facilities ?? {}).map(([k, v]) => [k, v.value]));
+        const sources = Object.fromEntries(Object.entries(x.facilities ?? {}).map(([k, v]) => [k, v.source]));
+        list.push({ id: `research-${slug}`, research: true, club: slug, name: x.name, ticks, sources, notes: x.notes || '', current: current(slug, ticks) });
+      }
+      return send(res, 200, list);
+    }
+
+    // Approving shows the comment and records the facilities; removing deletes the whole rating.
+    if (req.method === 'POST' && (r = m(/^\/api\/admin\/ratings\/research-([\w-]+)\/(approve|remove)$/))) {
+      const slug = r[1];
+      if (!RESEARCH[slug]) throw new HttpError(404, 'Not found.');
+      clubDb.research[slug] = r[2] === 'approve' ? 'approved' : 'removed';
+      if (r[2] === 'approve') {
+        const facts = (clubDb.facts[slug] ??= {});
+        for (const [k, v] of Object.entries(RESEARCH[slug].facilities ?? {})) {
+          if (FACILITIES.includes(k) && typeof v.value === 'boolean' && !facts[k]) facts[k] = { value: v.value, at: new Date().toISOString(), source: v.source };
+        }
+      }
+      await saveClubs();
+      return send(res, 200, { ok: true });
+    }
+
+    if (req.method === 'POST' && (r = m(/^\/api\/admin\/ratings\/([\w-]+)\/(approve|remove)$/))) {
+      const x = clubDb.ratings[r[1]];
+      if (!x) throw new HttpError(404, 'Not found.');
+      if (r[2] === 'approve') {
+        x.reviewed = true;
+        const facts = (clubDb.facts[x.club] ??= {});
+        for (const [k, v] of Object.entries(x.ticks)) facts[k] = { value: v, at: x.at };
+      } else {
+        delete clubDb.ratings[r[1]];
+      }
+      await saveClubs();
+      if (x.comment) summarise(x.club).catch((err) => console.error('Summary failed', err));
+      return send(res, 200, { ok: true });
+    }
+
     if (req.method === 'POST' && (r = m(/^\/api\/admin\/submissions\/([\w-]+)\/(approve|remove)$/))) {
       const s = db[r[1]];
       if (!s) throw new HttpError(404, 'Not found.');
@@ -601,6 +788,14 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
     if (url.pathname.startsWith('/api/')) return await route(req, res, url);
+    // Club banner photos (club-photos/<club>.jpg), named in club-facts.json.
+    const photo = /^\/club-photos\/([a-z0-9-]+)\.jpg$/.exec(url.pathname);
+    if (photo && (req.method === 'GET' || req.method === 'HEAD')) {
+      const data = await fs.promises.readFile(path.join(ROOT, 'club-photos', `${photo[1]}.jpg`)).catch(() => null);
+      if (!data) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('Not found'); }
+      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
+      return res.end(req.method === 'HEAD' ? undefined : data);
+    }
     const file = STATIC[url.pathname];
     if (!file || (req.method !== 'GET' && req.method !== 'HEAD')) {
       res.writeHead(404, { 'Content-Type': 'text/plain' });

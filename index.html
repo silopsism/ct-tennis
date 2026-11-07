@@ -63,6 +63,13 @@
             </svg>
           </button>
         </div>
+        <div class="tools" id="club-tools" hidden>
+          <div class="toggle" role="tablist" aria-label="Club view">
+            <button type="button" role="tab" data-club-view="teams">Teams</button>
+            <button type="button" role="tab" data-club-view="courts">Courts</button>
+            <button type="button" role="tab" data-club-view="about" hidden>About</button>
+          </div>
+        </div>
       </div>
       <div id="content"></div>
     </section>
@@ -107,6 +114,8 @@
   </dialog>
 
   <script src="submit.js"></script>
+  <script src="ratings.js"></script>
+  <script src="conditions.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

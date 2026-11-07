@@ -24,6 +24,8 @@ const state = {
   rows: null, model: null, slug: null, view: 'standings', project: false, openTeam: null, fetchedAt: null,
   mode: 'leagues', clubs: new Map(), club: null, // "Clubs" view: all of one club's teams across leagues
   clubSort: { key: 'all', dir: -1 }, domWeights: [1],
+  clubView: 'teams', // a club's tab: teams, courts (conditions.js) or about (ratings.js)
+  courtDate: null, courtHour: 15, // the Courts tab's date and hour
   score: readPref(SCORE_KEY, ['matches', 'sets', 'points']) ?? 'matches',
   edits: readEdits(), // { fixtureId: { hm, am, hs, as } } — results entered on this device
   api: false, // true when served by server.js (salwood), which takes captains' submissions
@@ -429,6 +431,7 @@ function renderPanel() {
     $('panel').hidden = false;
     $('division-title').textContent = title;
     document.querySelector('.tools').hidden = true;
+    $('club-tools').hidden = true;
     $('content').innerHTML = html;
     return;
   }
@@ -438,12 +441,22 @@ function renderPanel() {
     $('panel').hidden = false;
     $('division-title').textContent = c ? c.name : 'All clubs';
     document.querySelector('.tools').hidden = true;
-    $('content').innerHTML = c ? localNote(contextFixtures()) + clubHTML(c) : clubsHTML();
+    $('club-tools').hidden = !c;
+    if (state.clubView === 'about' && !state.api) state.clubView = 'teams'; // ratings need the server
+    for (const b of document.querySelectorAll('[data-club-view]')) {
+      b.setAttribute('aria-selected', String(b.dataset.clubView === state.clubView));
+      if (b.dataset.clubView === 'about') b.hidden = !state.api;
+    }
+    $('content').innerHTML = !c ? clubsHTML()
+      : state.clubView === 'courts' ? courtsTabHTML(c) // conditions.js
+      : state.clubView === 'about' ? aboutTabHTML(c) // ratings.js
+      : localNote(contextFixtures()) + clubHTML(c);
     return;
   }
 
   const d = state.model.get(state.slug);
   $('panel').hidden = !d;
+  $('club-tools').hidden = true;
   if (!d) return;
   $('division-title').textContent = d.name;
   document.querySelector('.tools').hidden = false;
@@ -522,6 +535,7 @@ function teamFixturesHTML(d, team) {
       mark = `<span class="pill ${res}" title="${{ W: 'Won', D: 'Drew', L: 'Lost' }[res]}">${res}</span>`;
     } else {
       score = pendingTag(f);
+      sub = fixtureConditions(f); // conditions.js
     }
     return `
       <li class="tf${f.played ? '' : ' upcoming'}">
@@ -881,6 +895,7 @@ function fixtureHTML(f) {
       <div class="fx-mid">${mid}</div>
       <button type="button" class="fx-team away${cls('A')}" data-team="${esc(f.away)}">${teamLabel(f.away)}</button>
       ${note ? `<div class="fx-note">${note}</div>` : ''}
+      ${fixtureConditions(f) /* conditions.js */}
     </div>`;
 }
 
@@ -1058,11 +1073,16 @@ function defaultSlug() {
   return (divs[0] || state.model.values().next().value)?.slug ?? null;
 }
 
-// Routes: #/<league>[/weekly[/projected]|/fixtures], #/clubs, #/clubs/<club>,
+// Routes: #/<league>[/weekly[/projected]|/fixtures], #/clubs, #/clubs/<club>[/courts[/<yyyy-mm-dd>]|/about],
 // #/submit, #/confirm/<fixture>/<link code>, #/admin
 function readHash() {
   const parts = location.hash.replace(/^#\/?/, '').split('/');
-  if (parts[0] === 'clubs') return { mode: 'clubs', club: parts[1] || null };
+  if (parts[0] === 'clubs') {
+    return {
+      mode: 'clubs', club: parts[1] || null, clubView: ['courts', 'about'].includes(parts[2]) ? parts[2] : 'teams',
+      date: /^\d{4}-\d\d-\d\d$/.test(parts[3] ?? '') ? parts[3] : null,
+    };
+  }
   if (SUB_MODES.includes(parts[0])) return { mode: parts[0], id: parts[1] || null, token: parts[2] || null };
   const [slug, view, extra] = parts;
   return { mode: 'leagues', slug: slug || null, view: VIEWS.includes(view) ? view : 'standings', project: extra === 'projected' };
@@ -1073,7 +1093,10 @@ function writeHash() {
   if (SUB_MODES.includes(state.mode)) {
     hash = subHash(); // submit.js
   } else if (state.mode === 'clubs') {
-    hash = `#/clubs${state.club ? `/${state.club}` : ''}`;
+    const view = !state.club ? ''
+      : state.clubView === 'courts' ? `/courts${state.courtDate ? `/${state.courtDate}` : ''}`
+      : state.clubView === 'about' ? '/about' : '';
+    hash = `#/clubs${state.club ? `/${state.club}` : ''}${view}`;
   } else {
     const view = state.view === 'standings' ? '' : `/${state.view}`;
     hash = `#/${state.slug}${view}${state.view === 'weekly' && state.project ? '/projected' : ''}`;
@@ -1095,6 +1118,8 @@ function applyHash() {
   if (h.mode === 'clubs') {
     state.mode = 'clubs';
     state.club = state.clubs.has(h.club) ? h.club : null;
+    state.clubView = h.clubView;
+    if (h.date) state.courtDate = h.date;
     state.slug ??= defaultSlug();
     writeHash();
     render();
@@ -1218,8 +1243,15 @@ document.addEventListener('click', (e) => {
   const btn = e.target.closest('.div-btn');
   if (btn) return select(btn.dataset.slug);
 
-  const tab = e.target.closest('.toggle button');
+  const tab = e.target.closest('.toggle button[data-view]');
   if (tab) return select(state.slug, tab.dataset.view);
+
+  const clubTab = e.target.closest('[data-club-view]');
+  if (clubTab) {
+    state.clubView = clubTab.dataset.clubView;
+    writeHash();
+    return renderPanel();
+  }
 
   const modeBtn = e.target.closest('[data-mode]');
   if (modeBtn) {

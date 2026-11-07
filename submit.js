@@ -140,7 +140,7 @@ function laterSteps(from) {
 
 function submitHTML() {
   if (!state.api) return '<p class="empty">Results can be submitted on ctt.salwood.co.za.</p>';
-  if (sub.done) return doneHTML();
+  if (sub.done) return doneHTML() + ratingHTML(sub.done.f.id); // ratings.js
 
   const team = sub.team && teamDivision(sub.team) ? sub.team : null;
   const parts = [];
@@ -340,6 +340,7 @@ async function sendSubmission() {
     const reply = await api('/api/submissions', { method: 'POST', body: { fixtureId: f.id, side, name: sub.name, ...sub.score, photo: sub.photo, readId: sub.reading?.readId } });
     lsSet(NAME_KEY, sub.name);
     sub.done = { ...reply, f, side };
+    startRating(reply, f.id); // ratings.js: away captains can rate the home club
     await loadSubmissions();
     rebuild();
   } catch (err) {
@@ -404,7 +405,7 @@ function confirmHTML() {
     ${s.rubbers?.length ? rubbersHTML(f, s.rubbers, s.sheetFlipped) : ''}
     <a href="${esc(s.photo)}" target="_blank" rel="noopener"><img class="s-photo" src="${esc(s.photo)}" alt="Photo of the score sheet"></a>
     ${action}
-  </div>`;
+  </div>${ratingHTML(s.fixtureId)}`;
 }
 
 async function sendConfirm(kind) {
@@ -419,7 +420,8 @@ async function sendConfirm(kind) {
   Object.assign(c, { busy: true, error: '', note });
   renderPanel();
   try {
-    await api(`/api/submissions/${encodeURIComponent(c.id)}/${kind}`, { method: 'POST', body: { t: c.token, name, note } });
+    const reply = await api(`/api/submissions/${encodeURIComponent(c.id)}/${kind}`, { method: 'POST', body: { t: c.token, name, note } });
+    startRating(reply, c.id); // ratings.js
     lsSet(NAME_KEY, name);
     c.disputing = false;
     await loadConfirm();
@@ -439,6 +441,7 @@ async function loadAdmin() {
   if (!lsGet(ADMIN_STORE)) return;
   try {
     a.list = await api('/api/admin/submissions', { admin: true });
+    await loadRatingsAdmin(); // ratings.js
     a.error = '';
   } catch (err) {
     a.error = err.message;
@@ -457,7 +460,7 @@ function adminHTML() {
     </div>`;
   }
   if (!a.list) return `<p class="empty">${a.error ? esc(a.error) : 'Loading…'}</p>`;
-  if (!a.list.length) return '<p class="empty">No submissions yet.</p>';
+  if (!a.list.length) return `${ratingsAdminHTML()}<p class="empty">No submissions yet.</p>`;
 
   const confirmed = a.list.filter((s) => s.status === 'confirmed').length;
   const k = encodeURIComponent(lsGet(ADMIN_STORE));
@@ -505,6 +508,7 @@ function adminHTML() {
   }).join('');
 
   return `
+    ${ratingsAdminHTML()}
     ${confirmed ? `<p class="local-note">${confirmed} confirmed by both teams.
       <button type="button" data-s="approve-all">Approve ${confirmed === 1 ? 'it' : 'all of them'}</button></p>` : ''}
     <div class="a-list">${cards}</div>

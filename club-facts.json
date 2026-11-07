@@ -1,0 +1,709 @@
+{
+ "bellville": {
+  "name": "Bellville",
+  "address": "Cnr Glenhaven Avenue & Central Drive, Glenhaven, Bellville",
+  "website": null,
+  "facebook": null,
+  "notes": "",
+  "facilities": {}
+ },
+ "bergvliet": {
+  "name": "Bergvliet",
+  "address": "33 Childrens Way, Bergvliet, Cape Town",
+  "website": "https://bergvliet-tennis.co.za/",
+  "facebook": "https://www.facebook.com/profile.php?id=61571132951316",
+  "notes": "8 courts, one of them floodlit; court fees paid by SnapScan at each court.",
+  "facilities": {
+   "floodlights": {
+    "value": true,
+    "source": "https://bergvliet-tennis.co.za/"
+   },
+   "coaching": {
+    "value": true,
+    "source": "https://bergvliet-tennis.co.za/"
+   },
+   "braai": {
+    "value": true,
+    "source": "https://bergvliet-tennis.co.za/"
+   },
+   "cards": {
+    "value": true,
+    "source": "https://bergvliet-tennis.co.za/"
+   }
+  },
+  "photo": {
+   "url": "https://bergvliet-tennis.co.za/wp-content/uploads/2025/01/this-side-up-media-bergvliet-tennis-club-gallery-001.jpg",
+   "page": "https://bergvliet-tennis.co.za/",
+   "shows": "aerial (drone) view of the clubhouse roof and courts among trees; 960x719; filename credits This Side Up Media"
+  }
+ },
+ "bonteheuwel": {
+  "name": "Bonteheuwel",
+  "address": "Jakkalsvlei Avenue, Bonteheuwel",
+  "website": null,
+  "facebook": null,
+  "notes": "",
+  "facilities": {}
+ },
+ "camps-bay": {
+  "name": "Camps Bay",
+  "address": "The Drive, Camps Bay, Cape Town, 8005",
+  "website": null,
+  "facebook": "https://www.facebook.com/campsbaytennisclub",
+  "notes": "Next to The Bay Hotel; Africa Padel runs padel courts on the same site.",
+  "facilities": {
+   "floodlights": {
+    "value": true,
+    "source": "https://tennissa.co.za/w/blog/aprils-club-of-the-month-camps-bay"
+   },
+   "change_rooms": {
+    "value": true,
+    "source": "https://playtomic.com/clubs/africa-padel-at-the-bay-hotel"
+   }
+  }
+ },
+ "chrismar": {
+  "name": "Chrismar",
+  "address": "22 Glanville Street, Chrismar, Bellville, 7530",
+  "website": "https://www.chrismartennis.co.za",
+  "facebook": null,
+  "notes": "7 courts (4 with lights) and a clubhouse with an equipped kitchen and covered braai room.",
+  "facilities": {
+   "floodlights": {
+    "value": true,
+    "source": "https://www.chrismartennis.co.za/clubfacilities.php"
+   },
+   "parking": {
+    "value": true,
+    "source": "https://www.chrismartennis.co.za/clubfacilities.php"
+   },
+   "braai": {
+    "value": true,
+    "source": "https://www.chrismartennis.co.za/clubfacilities.php"
+   },
+   "coaching": {
+    "value": true,
+    "source": "https://www.chrismartennis.co.za"
+   },
+   "change_rooms": {
+    "value": true,
+    "source": "https://www.capetown.gov.za/Family and home/See-all-city-facilities/Our-recreational-facilities/Sports fields/Chrismar Sports Ground"
+   }
+  },
+  "photo": {
+   "url": "https://www.chrismartennis.co.za/images/banner/CM03.jpg",
+   "page": "https://www.chrismartennis.co.za/clubfacilities.php",
+   "shows": "daytime view of the courts with club buildings behind (1280x590)"
+  }
+ },
+ "claremont": {
+  "name": "Claremont",
+  "address": "20 Annette Way, Claremont, Cape Town, 7708",
+  "website": "https://www.claremonttennis.co.za",
+  "facebook": "https://www.facebook.com/p/Claremont-Tennis-Club-100054267051271",
+  "notes": "8 all-weather courts (courts 5 and 6 lit); Vida Cafe at Africa Padel by the back gate.",
+  "facilities": {
+   "practice_wall": {
+    "value": true,
+    "source": "https://www.claremonttennis.co.za"
+   },
+   "shop": {
+    "value": true,
+    "source": "https://www.claremonttennis.co.za"
+   },
+   "floodlights": {
+    "value": true,
+    "source": "https://www.claremonttennis.co.za"
+   },
+   "change_rooms": {
+    "value": true,
+    "source": "https://www.claremonttennis.co.za"
+   },
+   "bar": {
+    "value": true,
+    "source": "https://www.claremonttennis.co.za"
+   },
+   "braai": {
+    "value": true,
+    "source": "https://www.claremonttennis.co.za"
+   },
+   "coaching": {
+    "value": true,
+    "source": "https://www.claremonttennis.co.za"
+   },
+   "cards": {
+    "value": true,
+    "source": "https://www.claremonttennis.co.za"
+   }
+  },
+  "photo": {
+   "url": "https://claremonttennis.co.za/wp-content/uploads/claremont-tennis-club-cpae-town-table-mounrtain-slider-01.jpg",
+   "page": "https://www.claremonttennis.co.za",
+   "shows": "blue hard courts with players and the Table Mountain range behind (1280x960; home page slider)",
+   "focus": "50% 90%"
+  }
+ },
+ "constantia": {
+  "name": "Constantia",
+  "address": "Constantia Sports Centre, 21 Midhurst Way (off Main Road), Constantia",
+  "website": null,
+  "facebook": null,
+  "notes": "",
+  "facilities": {},
+  "photo": {
+   "url": "https://constantiatennisclub.co.za/wp-content/uploads/2022/08/banner_narrow-scaled.jpg",
+   "page": "https://constantiatennisclub.co.za/",
+   "shows": "panorama of the courts and the corner of the clubhouse/pavilion, with a strong sun flare (2560x1440; the home page banner for tablet screens)"
+  }
+ },
+ "cput": {
+  "name": "CPUT",
+  "address": "CPUT Bellville Campus, Symphony Way, Bellville",
+  "website": null,
+  "facebook": null,
+  "notes": "",
+  "facilities": {}
+ },
+ "edgemead": {
+  "name": "Edgemead",
+  "address": "Southdale Road (off Link Way), Edgemead, Cape Town",
+  "website": "https://edgemeadtennis.net.za/",
+  "facebook": "https://www.facebook.com/edgemeadtennis/",
+  "notes": "Trio Cafe on site; rackets and balls can be hired from the Trio Pro Shop.",
+  "facilities": {
+   "floodlights": {
+    "value": true,
+    "source": "https://edgemeadtennis.net.za/"
+   },
+   "shop": {
+    "value": true,
+    "source": "https://edgemeadtennis.net.za/trio-pro-shop/"
+   },
+   "coaching": {
+    "value": true,
+    "source": "https://edgemeadtennis.net.za/coaching/"
+   }
+  },
+  "photo": {
+   "url": "https://edgemeadtennis.net.za/wp-content/uploads/2024/01/banner1.jpg",
+   "page": "https://edgemeadtennis.net.za/about/",
+   "shows": "front of the clubhouse with the 'Edgemead Tennis Club' sign (800x600)"
+  }
+ },
+ "eversdal": {
+  "name": "Eversdal",
+  "address": "57 Mountain View Drive, Eversdal, Bellville",
+  "website": null,
+  "facebook": null,
+  "notes": "Bandeja Padel runs padel and pickleball courts at the same sports club.",
+  "facilities": {
+   "change_rooms": {
+    "value": true,
+    "source": "https://www.capetown.gov.za/Family and home/See-all-city-facilities/Our-recreational-facilities/Sports fields/Eversdal-Sports-Ground"
+   }
+  }
+ },
+ "fish-hoek": {
+  "name": "Fish Hoek",
+  "address": "19 Recreation Road, Fish Hoek",
+  "website": "https://fhtc.co.za/",
+  "facebook": "https://www.instagram.com/fishhoektennisclub/",
+  "notes": "6 courts (4 floodlit); visitors sign in at the clubhouse and pay by SnapScan.",
+  "facilities": {
+   "floodlights": {
+    "value": true,
+    "source": "https://fhtc.co.za/"
+   },
+   "bar": {
+    "value": true,
+    "source": "https://fhtc.co.za/"
+   },
+   "braai": {
+    "value": true,
+    "source": "https://fhtc.co.za/"
+   },
+   "coaching": {
+    "value": true,
+    "source": "https://fhtc.co.za/coaching-2/"
+   },
+   "cards": {
+    "value": true,
+    "source": "https://fhtc.co.za/"
+   }
+  },
+  "photo": {
+   "url": "https://fhtc.co.za/wp-content/uploads/2026/02/FHTC-Clubhouse-Exterior.jpeg",
+   "page": "https://fhtc.co.za/",
+   "shows": "clubhouse veranda and stand with members watching the courts (1600x1069; alt 'FHTC Clubhouse Exterior')"
+  }
+ },
+ "fresnaye": {
+  "name": "Fresnaye",
+  "address": "15 Avenue St Bartholomew, Fresnaye (Sea Point), Cape Town, 8005",
+  "website": "https://www.fresnayesportsclub.co.za",
+  "facebook": "https://www.facebook.com/pages/Fresnaye-Tennis-Club/157472480940754",
+  "notes": "6 hard courts (one lit until 21:00) with sea views; clubhouse has a restaurant and licensed bar.",
+  "facilities": {
+   "floodlights": {
+    "value": true,
+    "source": "https://www.fresnayesportsclub.co.za/tennis.html"
+   },
+   "bar": {
+    "value": true,
+    "source": "https://www.fresnayesportsclub.co.za"
+   },
+   "braai": {
+    "value": true,
+    "source": "https://www.fresnayesportsclub.co.za"
+   },
+   "coaching": {
+    "value": true,
+    "source": "https://www.fresnayesportsclub.co.za/tennis.html"
+   },
+   "cards": {
+    "value": true,
+    "source": "https://www.fresnayesportsclub.co.za/tennis.html"
+   }
+  },
+  "photo": {
+   "url": "https://www.fresnayesportsclub.co.za/uploads/5/4/3/5/54353139/editor/204441.jpg?1721761577",
+   "page": "https://www.fresnayesportsclub.co.za",
+   "shows": "aerial view of the tennis courts, clubhouse and bowling green (958x239, a very wide banner)"
+  }
+ },
+ "gardens": {
+  "name": "Gardens",
+  "address": "Upper De Waal Park, 1 Molteno Road, Gardens, Cape Town (opposite the Mediclinic)",
+  "website": "https://gardenslawntennisclub.co.za",
+  "facebook": "https://www.facebook.com/gardenslawntennisclub",
+  "notes": "Visitors welcome; book courts online via booknplay.co.za, with a Thursday-evening bring-and-braai social.",
+  "facilities": {
+   "braai": {
+    "value": true,
+    "source": "https://gardenslawntennisclub.co.za"
+   },
+   "coaching": {
+    "value": true,
+    "source": "https://gardenslawntennisclub.co.za"
+   },
+   "floodlights": {
+    "value": true,
+    "source": "https://www.pickleheads.com/courts/za/western-cape/cape-town/gardens-lawn-tennis-club"
+   }
+  },
+  "photo": {
+   "url": "https://gardenslawntennisclub.co.za/wp-content/uploads/2024/09/Pierreclub-scaled.jpg",
+   "page": "https://gardenslawntennisclub.co.za/",
+   "shows": "clubhouse behind the courts, palms and Table Mountain; one player in the foreground (2560x2260)",
+   "focus": "50% 60%"
+  }
+ },
+ "glen": {
+  "name": "Glen",
+  "address": "Victoria Road, Clifton (in the Clifton scenic reserve, near Clifton Beach)",
+  "website": "https://www.glenclub.co.za",
+  "facebook": "https://www.facebook.com/profile.php?id=61573802270381",
+  "notes": "Eight outdoor hard courts (two floodlit) with sea views; renovated clubhouse serves food and drinks; visitors can book courts.",
+  "facilities": {
+   "floodlights": {
+    "value": true,
+    "source": "https://www.glenclub.co.za/tennis"
+   },
+   "coaching": {
+    "value": true,
+    "source": "https://www.glenclub.co.za/tennis"
+   },
+   "shop": {
+    "value": true,
+    "source": "https://www.glenclub.co.za/tennis"
+   }
+  },
+  "photo": {
+   "url": "https://www.glenclub.co.za/assets/images/sub_article_featured_image_13_4/Glen-Country-Club-10172025_143205.jpg",
+   "page": "https://www.glenclub.co.za/tennis",
+   "shows": "clubhouse veranda looking over the tennis courts and the sea (800x450)"
+  }
+ },
+ "green-point": {
+  "name": "Green Point",
+  "address": "Green Point Urban Park, Bill Peters Drive, Green Point, Cape Town",
+  "website": "https://www.greenpointtennis.co.za",
+  "facebook": "https://www.facebook.com/greenpointtennis",
+  "notes": "Ten all-weather hard courts; visitors can hire a court, equipment and a hitting partner.",
+  "facilities": {
+   "coaching": {
+    "value": true,
+    "source": "https://whatsonincapetown.com/event/green-point-tennis-club/"
+   },
+   "floodlights": {
+    "value": true,
+    "source": "https://fresha.com/bg/a/superslam-tennis-academy-cape-town-urban-park-bill-peters-drive-c22e26ds"
+   }
+  },
+  "photo": {
+   "url": "https://www.greenpointtennis.co.za/images/gptc_aerial2.jpg",
+   "page": "https://www.greenpointtennis.co.za/",
+   "shows": "aerial view of the club's red and green courts beside Green Point Urban Park (900x400)"
+  }
+ },
+ "kelvin-grove": {
+  "name": "Kelvin Grove",
+  "address": "144 Campground Road, Newlands, Cape Town",
+  "website": "https://www.kelvingrove.co.za",
+  "facebook": null,
+  "notes": "Eleven courts (eight floodlit, plus a practice court); restaurants, coffee shop, pool and gym on site; tennis balls sold at reception.",
+  "facilities": {
+   "floodlights": {
+    "value": true,
+    "source": "https://www.kelvingrove.co.za/tennis/"
+   },
+   "coaching": {
+    "value": true,
+    "source": "https://www.kelvingrove.co.za/tennis/"
+   },
+   "bar": {
+    "value": true,
+    "source": "https://www.kelvingrove.co.za/restaurants-bars/"
+   },
+   "kids": {
+    "value": true,
+    "source": "https://www.kelvingrove.co.za/restaurants-bars/"
+   },
+   "change_rooms": {
+    "value": true,
+    "source": "https://playtomic.com/fr/clubs/kelvin-grove-managed-by-padel-365"
+   },
+   "wheelchair": {
+    "value": true,
+    "source": "https://playtomic.com/fr/clubs/kelvin-grove-managed-by-padel-365"
+   }
+  },
+  "photo": {
+   "url": "https://www.kelvingrove.co.za/wp-content/uploads/2025/09/building-4.jpg",
+   "page": "https://www.kelvingrove.co.za/",
+   "shows": "aerial view of the clubhouse with the tennis courts and fields (1437x1080)"
+  }
+ },
+ "kenridge": {
+  "name": "Kenridge",
+  "address": "21 De Villiers Avenue, Kenridge, Durbanville (between Kenridge Primary and Fairmont High)",
+  "website": "https://kenridgetennisclub.co.za",
+  "facebook": null,
+  "notes": "Six courts (three floodlit) and a clubhouse with a well-stocked bar; visitor fees payable before play.",
+  "facilities": {
+   "floodlights": {
+    "value": true,
+    "source": "https://kenridgetennisclub.co.za/about-us/"
+   },
+   "bar": {
+    "value": true,
+    "source": "https://kenridgetennisclub.co.za/about-us/"
+   },
+   "change_rooms": {
+    "value": true,
+    "source": "https://kenridgetennisclub.co.za/about-us/"
+   },
+   "coaching": {
+    "value": true,
+    "source": "https://kenridgetennisclub.co.za/coaching/"
+   }
+  },
+  "photo": {
+   "url": "http://kenridgetennisclub.co.za/wp-content/uploads/2024/05/R3JW1619-Panocrb2-copy-scaled.jpg",
+   "page": "https://kenridgetennisclub.co.za/",
+   "shows": "brick clubhouse with Kenridge sign next to the courts (2560x1165)"
+  }
+ },
+ "khayelitsha": {
+  "name": "Khayelitsha",
+  "address": "False Bay College (Khayelitsha campus), Mew Way, Khayelitsha",
+  "website": null,
+  "facebook": null,
+  "notes": "",
+  "facilities": {}
+ },
+ "langa": {
+  "name": "Langa",
+  "address": "Sandile Avenue, Langa",
+  "website": null,
+  "facebook": null,
+  "notes": "",
+  "facilities": {}
+ },
+ "llandudno": {
+  "name": "Llandudno",
+  "address": "1 Gully Road, Llandudno, Cape Town",
+  "website": "http://www.llandudnosportsclub.co.za",
+  "facebook": "https://www.facebook.com/profile.php?id=100084812030455",
+  "notes": "Two tennis and two squash courts with tennis and main clubhouses; floodlights on the lower court until 9pm on weeknights and 10pm on weekends.",
+  "facilities": {
+   "floodlights": {
+    "value": true,
+    "source": "https://llandudno.org.za/?p=205"
+   },
+   "coaching": {
+    "value": true,
+    "source": "http://llandudnosportsclub.co.za/tennis/"
+   }
+  },
+  "photo": {
+   "url": "https://llandudnosportsclub.co.za/wp-content/uploads/2022/10/devide.jpg",
+   "page": "https://llandudnosportsclub.co.za/",
+   "shows": "floodlit courts at dusk with the Llandudno mountain behind (1600x904)"
+  }
+ },
+ "meadowridge": {
+  "name": "Meadowridge",
+  "address": "4 Howard Drive, Meadowridge, Cape Town",
+  "website": "https://meadowridgetennisclub.co.za",
+  "facebook": "https://www.facebook.com/meadowridgetennis/",
+  "notes": "Eight courts (two floodlit) and a clubhouse with members' hall; grounds are entered through a single security gate.",
+  "facilities": {
+   "floodlights": {
+    "value": true,
+    "source": "https://meadowridgetennisclub.co.za/club-info/facilities/"
+   },
+   "change_rooms": {
+    "value": true,
+    "source": "https://meadowridgetennisclub.co.za/club-info/facilities/"
+   },
+   "bar": {
+    "value": true,
+    "source": "https://meadowridgetennisclub.co.za/club-info/facilities/"
+   },
+   "braai": {
+    "value": true,
+    "source": "https://meadowridgetennisclub.co.za/club-info/facilities/"
+   },
+   "kids": {
+    "value": true,
+    "source": "https://meadowridgetennisclub.co.za/club-info/facilities/"
+   },
+   "coaching": {
+    "value": true,
+    "source": "https://meadowridgetennisclub.co.za"
+   }
+  },
+  "photo": {
+   "url": "https://meadowridgetennisclub.co.za/wordpress/wp-content/gallery/club-photos/Club.jpg",
+   "page": "https://meadowridgetennisclub.co.za/club-info/facilities/",
+   "shows": "front of the clubhouse with the Meadowridge Tennis Club sign (2500x1656)"
+  }
+ },
+ "milnerton": {
+  "name": "Milnerton",
+  "address": "Corner of Park Road and Jansens Road, Milnerton",
+  "website": "https://milnertontennis.yolasite.com",
+  "facebook": null,
+  "notes": "Eight hard courts (two floodlit); junior and adult coaching including Cardio Tennis.",
+  "facilities": {
+   "floodlights": {
+    "value": true,
+    "source": "https://milnertontennis.yolasite.com/"
+   },
+   "coaching": {
+    "value": true,
+    "source": "https://milnertontennis.yolasite.com/"
+   }
+  }
+ },
+ "mitchells-plain": {
+  "name": "Mitchells Plain",
+  "address": "Westridge Swimming Pool, 120 Silversands Avenue, Westridge, Mitchells Plain",
+  "website": null,
+  "facebook": null,
+  "notes": "Floodlit courts on Silversands Avenue next to the Westridge swimming pool.",
+  "facilities": {
+   "floodlights": {
+    "value": true,
+    "source": "https://plainsman.co.za/sport/2025-05-06-goal-is-to-turn-tennis-into-a-school-sport-says-coach"
+   },
+   "coaching": {
+    "value": true,
+    "source": "https://plainsman.co.za/sport/2025-05-06-goal-is-to-turn-tennis-into-a-school-sport-says-coach"
+   }
+  }
+ },
+ "monte-vista": {
+  "name": "Monte Vista",
+  "address": "Tulbagh Street, Monte Vista (Monte Vista Sports Ground)",
+  "website": null,
+  "facebook": null,
+  "notes": "City of Cape Town sports ground with change rooms and facilities for cricket and tennis.",
+  "facilities": {
+   "change_rooms": {
+    "value": true,
+    "source": "https://www.capetown.gov.za/Family%20and%20home/See-all-city-facilities/Our-recreational-facilities/Sports%20fields/Monte-Vista-Sports-Ground"
+   },
+   "wheelchair": {
+    "value": true,
+    "source": "https://www.capetown.gov.za/Family%20and%20home/See-all-city-facilities/Our-recreational-facilities/Sports%20fields/Monte-Vista-Sports-Ground"
+   }
+  }
+ },
+ "old-mutual": {
+  "name": "Old Mutual",
+  "address": "Jan Smuts Drive, Pinelands",
+  "website": null,
+  "facebook": null,
+  "notes": "",
+  "facilities": {}
+ },
+ "orangia": {
+  "name": "Orangia",
+  "address": "15 Hof Street, Gardens",
+  "website": null,
+  "facebook": null,
+  "notes": "",
+  "facilities": {}
+ },
+ "parow": {
+  "name": "Parow",
+  "address": "17A De Grendel Road, Parow North",
+  "website": null,
+  "facebook": null,
+  "notes": "",
+  "facilities": {}
+ },
+ "pinelands": {
+  "name": "Pinelands",
+  "address": "45 Forest Drive Service Road, Pinelands, Cape Town, 7405",
+  "website": "https://www.pinelandstennisclub.co.za",
+  "facebook": "https://www.facebook.com/share/g/1DcrjMQ45H/",
+  "notes": "Eight courts, four floodlit, including one clay court (higher visitor fee for the clay court).",
+  "facilities": {
+   "floodlights": {
+    "value": true,
+    "source": "https://www.pinelandstennisclub.co.za"
+   },
+   "coaching": {
+    "value": true,
+    "source": "https://www.pinelandstennisclub.co.za/coaching/"
+   }
+  },
+  "photo": {
+   "url": "https://www.pinelandstennisclub.co.za/wp-content/uploads/2021/01/PTC-ClubhouseShot.jpg",
+   "page": "https://www.pinelandstennisclub.co.za/",
+   "shows": "clubhouse behind the courts, from courtside (1920x1440)"
+  }
+ },
+ "plumstead": {
+  "name": "Plumstead",
+  "address": "28 Victoria Road, Plumstead",
+  "website": "https://www.plumsteadtennisclub.co.za",
+  "facebook": "https://www.facebook.com/plumsteadtennis/",
+  "notes": "Six hard courts (two floodlit) and a large hall available for hire.",
+  "facilities": {
+   "floodlights": {
+    "value": true,
+    "source": "https://www.plumsteadtennisclub.co.za"
+   },
+   "change_rooms": {
+    "value": true,
+    "source": "https://www.plumsteadtennisclub.co.za"
+   },
+   "coaching": {
+    "value": true,
+    "source": "https://www.plumsteadtennisclub.co.za"
+   }
+  },
+  "photo": {
+   "url": "https://www.plumsteadtennisclub.co.za/wp-content/uploads/2022/01/PTC-Aerial-View.webp",
+   "page": "https://www.plumsteadtennisclub.co.za/",
+   "shows": "aerial view of the courts and clubhouse (800x450)"
+  }
+ },
+ "tab": {
+  "name": "TAB",
+  "address": "6 Bill Peters Drive, Green Point",
+  "website": null,
+  "facebook": null,
+  "notes": "Home of the Tennis South Africa development centre at Three Anchor Bay.",
+  "facilities": {}
+ },
+ "tornadoes": {
+  "name": "Tornadoes",
+  "address": "1 Donkin Avenue, Table View",
+  "website": null,
+  "facebook": null,
+  "notes": "Padel courts and a restaurant on site.",
+  "facilities": {
+   "coaching": {
+    "value": true,
+    "source": "https://magicpin.com/south-africa/Cape-Town/Tableview/Other/Atlantic-Tennis-Academy/store/2369443"
+   },
+   "change_rooms": {
+    "value": true,
+    "source": "https://playtomic.com/clubs/atlantic-padel-table-view"
+   },
+   "kids": {
+    "value": true,
+    "source": "https://playtomic.com/clubs/atlantic-padel-table-view"
+   },
+   "wheelchair": {
+    "value": true,
+    "source": "https://playtomic.com/clubs/atlantic-padel-table-view"
+   }
+  }
+ },
+ "uct": {
+  "name": "UCT",
+  "address": "UCT Sports Centre, Madiba Circle, Upper Campus, Rondebosch",
+  "website": "https://sport.uct.ac.za/tennis",
+  "facebook": null,
+  "notes": "",
+  "facilities": {
+   "coaching": {
+    "value": true,
+    "source": "https://sport.uct.ac.za/tennis"
+   }
+  }
+ },
+ "uwc": {
+  "name": "UWC",
+  "address": "Robert Sobukwe Drive, Bellville",
+  "website": null,
+  "facebook": null,
+  "notes": "",
+  "facilities": {},
+  "photo": {
+   "url": "https://uwcsport.uwc.ac.za/images/facility-tennis-court.jpg",
+   "page": "https://uwcsport.uwc.ac.za/facilities.html",
+   "shows": "aerial view of the UWC tennis courts (4000x2250)"
+  }
+ },
+ "welgemoed": {
+  "name": "Welgemoed",
+  "address": "Jip de Jager Drive, Welgemoed",
+  "website": null,
+  "facebook": null,
+  "notes": "Restaurant and a padel court at the club.",
+  "facilities": {}
+ },
+ "wpcc": {
+  "name": "WPCC",
+  "address": "65 Ave De Mist, Rondebosch",
+  "website": "https://www.wpcc.co.za/tennis",
+  "facebook": "https://facebook.com/mywpcc",
+  "notes": "Tennis clubhouse and seven courts (four floodlit), with a club restaurant and kiosk at the Sports Centre.",
+  "facilities": {
+   "floodlights": {
+    "value": true,
+    "source": "https://www.wpcc.co.za/tennis"
+   }
+  },
+  "photo": {
+   "url": "https://images.squarespace-cdn.com/content/v1/6849780be21b7339bd41f8cb/1769605850605-ZOY4CM1KAS83TEBSWUIB/DSC_2298.JPG?format=2500w",
+   "page": "https://www.wpcc.co.za/tennis",
+   "shows": "WPCC tennis courts with players and Table Mountain behind (2500w)"
+  }
+ },
+ "wynberg": {
+  "name": "Wynberg",
+  "address": "92 Harfield Road, Kenilworth",
+  "website": null,
+  "facebook": null,
+  "notes": "",
+  "facilities": {}
+ }
+}

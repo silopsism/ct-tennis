@@ -20,6 +20,13 @@
   --court: #2b5d88;
   --court-line: rgb(255 255 255 / .9);
   --ball: #dcf04a;
+  --map: #eef1ea;
+  --map-road: #ffffff;
+  --map-road-edge: #d5dbd2;
+  --map-bldg: #dcd8cf;
+  --map-pitch: #dfe9d6;
+  --map-pool: #bfe0ef;
+  --sun: #e8960c;
   --card-shadow: 0 1px 2px rgb(0 0 0 / .08), 0 10px 30px rgb(8 30 18 / .22);
   color-scheme: light;
 }
@@ -45,6 +52,13 @@
     --runoff: #123323;
     --court: #15304b;
     --court-line: rgb(255 255 255 / .7);
+    --map: #18201b;
+    --map-road: #2c352f;
+    --map-road-edge: #2c352f;
+    --map-bldg: #272c28;
+    --map-pitch: #1c271f;
+    --map-pool: #1d3440;
+    --sun: #f5b545;
     --card-shadow: 0 1px 2px rgb(0 0 0 / .3), 0 10px 30px rgb(0 0 0 / .45);
     color-scheme: dark;
   }
@@ -70,6 +84,13 @@
   --runoff: #123323;
   --court: #15304b;
   --court-line: rgb(255 255 255 / .7);
+  --map: #18201b;
+  --map-road: #2c352f;
+  --map-road-edge: #2c352f;
+  --map-bldg: #272c28;
+  --map-pitch: #1c271f;
+  --map-pool: #1d3440;
+  --sun: #f5b545;
   --card-shadow: 0 1px 2px rgb(0 0 0 / .3), 0 10px 30px rgb(0 0 0 / .45);
   color-scheme: dark;
 }
@@ -1329,3 +1350,277 @@ button.chip.up:hover { box-shadow: inset 0 0 0 1px var(--accent); color: var(--a
 .s-games.won { color: var(--win); font-weight: 600; }
 
 .a-sheet.bad-plain { color: var(--draw); }
+
+/* A club's Courts tab and the forecast line under upcoming fixtures (conditions.js) */
+
+.courts-tab { padding: 0 16px 4px; }
+
+.courts-tab .club-summary { padding-left: 0; padding-right: 0; }
+
+.court-controls, .court-hours, .court-dates { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+.court-controls { margin-bottom: 8px; }
+
+.court-controls input[type="date"] {
+  font: inherit;
+  font-size: 14px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.court-dates button, .court-hours button {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.court-dates button small { color: var(--faint); font-weight: 500; }
+
+.court-dates button[aria-pressed="true"], .court-hours button[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.court-dates button[aria-pressed="true"] small { color: inherit; opacity: .8; }
+
+.court-map { display: block; width: 100%; max-width: 520px; height: auto; margin: 6px auto 0; }
+
+.court-map .m-bg { fill: var(--map); }
+.court-map .m-pitch { fill: var(--map-pitch); }
+.court-map .m-pool { fill: var(--map-pool); }
+.court-map .m-bldg { fill: var(--map-bldg); }
+.court-map .m-road, .court-map .m-road-edge { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.court-map .m-road { stroke: var(--map-road); }
+.court-map .m-road-edge { stroke: var(--map-road-edge); }
+.court-map .m-road-name { fill: var(--muted); font-size: 5.5px; text-anchor: middle; dominant-baseline: central; }
+.court-map .m-runoff { fill: var(--runoff); }
+.court-map .m-court { fill: var(--court); }
+.court-map .m-lines { fill: none; stroke: var(--court-line); stroke-width: .22; }
+.court-map .m-net { stroke: var(--court-line); stroke-width: .35; }
+.court-map .m-end { fill: var(--muted); font-size: 7px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+.court-map .m-ray { stroke: var(--sun); stroke-width: .5; opacity: .55; stroke-dasharray: 1.5 2.5; }
+.court-map .m-streak { stroke: var(--ink); stroke-linecap: round; fill: none; opacity: .3; animation: m-blow linear infinite; }
+.court-map .m-ring { fill: none; stroke: var(--line); stroke-width: 1.2; }
+.court-map .m-tick { stroke: var(--faint); stroke-width: .8; }
+.court-map .m-cardinal { fill: var(--muted); font-size: 9px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
+.court-map .m-cardinal.n { fill: var(--ink); font-size: 11px; }
+.court-map .m-sunpath { fill: none; stroke: var(--sun); stroke-width: 1.4; stroke-dasharray: 2 2.5; opacity: .7; }
+.court-map .m-sun { cursor: pointer; }
+.court-map .m-sun circle { fill: var(--surface); stroke: var(--sun); stroke-width: 1.4; }
+.court-map .m-sun.on circle { fill: var(--sun); }
+.court-map .m-sun text { fill: var(--muted); font-size: 7px; text-anchor: middle; dominant-baseline: central; }
+.court-map .m-sun.on text { fill: var(--ink); font-weight: 700; }
+.court-map .m-sunray { stroke: var(--sun); stroke-width: 1.3; stroke-linecap: round; }
+
+@keyframes m-blow { to { stroke-dashoffset: -120; } }
+
+@media (prefers-reduced-motion: reduce) { .court-map .m-streak { animation: none; } }
+
+.wind-arrow { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -2px; }
+
+.court-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+
+.court-readout > div { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+
+.court-readout h3 {
+  margin: 0 0 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.court-readout .big { font-size: 17px; font-weight: 650; }
+
+.court-readout p { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+
+.court-readout p strong { color: var(--ink); font-weight: 600; }
+
+.court-readout .wind-basis { font-size: 12px; color: var(--faint); }
+
+@media (max-width: 480px) { .court-readout { grid-template-columns: 1fr; } }
+
+.court-strip {
+  width: 100%;
+  margin-top: 12px;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.court-strip th, .court-strip td { padding: 6px 2px; border-top: 1px solid var(--line); }
+
+.court-strip thead th { border-top: 0; }
+
+.court-strip th[scope="row"] { text-align: left; font-weight: 500; color: var(--muted); }
+
+.court-strip thead button {
+  font: inherit;
+  font-weight: 600;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+.court-strip .on { background: var(--accent-soft); }
+
+.court-strip thead .on button { color: var(--ink); }
+
+.court-strip .glare { color: var(--loss); font-weight: 650; }
+
+.fx-cond {
+  grid-column: 1 / -1;
+  justify-self: center;
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.tf-opp .fx-cond { display: block; margin-top: 1px; }
+
+.fx-cond:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
+
+/* Club ratings (ratings.js): the form after a result, the About tab, and the admin list */
+
+.r-card { margin: 0 16px 16px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius); }
+
+.r-card h3 { margin: 0; font-size: 15px; font-weight: 650; }
+
+.r-card .s-big { margin: 0 0 4px; font-size: 16px; }
+
+.r-card .s-note:first-of-type { margin-bottom: 10px; }
+
+.r-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.r-pick { display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; }
+
+.r-star, .r-vibe, .r-none {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+}
+
+.r-star { font-size: 24px; color: var(--line); }
+.r-star.on { color: var(--sun); }
+
+.r-none { font: inherit; font-size: 12px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px; margin-right: 4px; }
+.r-none[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+
+.r-vibe { font-size: 24px; opacity: .35; filter: grayscale(1); border-radius: 8px; }
+.r-vibe.on { opacity: 1; filter: none; background: var(--accent-soft); }
+
+.r-label { margin: 12px 0 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+
+.r-label .s-note { font-weight: 400; margin-left: 4px; }
+
+.r-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+
+.r-chip {
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+button.r-chip { cursor: pointer; }
+
+.r-chip.yes { background: var(--win-soft); border-color: var(--win-soft); color: var(--win); font-weight: 600; }
+.r-chip.no { color: var(--faint); text-decoration: line-through; }
+
+.about-tab { padding: 14px 16px 4px; }
+
+.r-head { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+
+.r-vibe-big { font-size: 40px; line-height: 1; }
+
+.r-summary { margin: 2px 0 0; font-size: 15px; font-style: italic; }
+
+.r-h { margin: 18px 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+
+.a-list + .hint + .r-h, .r-h:first-child { margin-top: 4px; }
+
+.r-table { border-collapse: collapse; width: 100%; max-width: 440px; font-size: 14px; }
+
+.r-table th, .r-table td { padding: 5px 0; border-bottom: 1px solid var(--line); text-align: left; }
+
+.r-table th { font-weight: 500; color: var(--muted); }
+
+.r-table .r-n { text-align: right; color: var(--faint); font-size: 12px; width: 2.5em; }
+
+.r-stars {
+  font-size: 18px;
+  letter-spacing: 1px;
+  background: linear-gradient(90deg, var(--sun) calc(var(--v) / 3 * 100%), var(--line) 0);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.r-comments { margin: 0; padding: 0; list-style: none; }
+
+.r-comments li { padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+
+.r-comments .s-note { margin-left: 4px; font-size: 12px; }
+
+.r-maps { margin: 16px 0 0; font-size: 14px; }
+
+.r-maps a { color: var(--accent); font-weight: 600; text-decoration: none; }
+
+.r-maps .s-note { display: block; margin-top: 2px; font-size: 12px; }
+
+.r-quote { margin: 6px 0 0; font-style: italic; }
+
+#content > .r-h { padding: 0 16px; margin-top: 16px; }
+
+.r-maps p { margin: 0; }
+
+.r-maps .r-address { margin-bottom: 4px; color: var(--ink); font-weight: 400; }
+
+.about-tab > .r-maps { margin-top: 8px; }
+
+/* Club banner photo across the top of the About tab */
+.r-banner { position: relative; margin: -14px -16px 14px; }
+
+.r-banner img { display: block; width: 100%; height: 200px; object-fit: cover; background: var(--hover); }
+
+@media (min-width: 600px) { .r-banner img { height: 240px; } }
+
+.r-banner figcaption {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / .5);
+  color: #fff;
+  font-size: 11px;
+}
+
+.r-banner figcaption a { color: inherit; }
