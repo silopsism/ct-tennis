@@ -10,7 +10,7 @@ Live standings and fixture results, read straight from the **Results Entry** tab
 - Clubs view: every club's teams across all leagues. The all-clubs table sorts on any column, and ranks clubs on **dominance**. That is each team's share of the league points it could have won (×100), weighted by division. Divisions sit on one ladder per competition. Each overlaps the one above by 20%, 25%, 30%, 40%, 50%, then 60% going down (`DIVISION_OVERLAP`). A division's weight is the height of its middle on that ladder, squared (`WEIGHT_CURVE`). Lower divisions still count, but many weak teams can't outweigh a few strong ones.
 - **Courts tab** on each club page (`#/clubs/<club>/courts[/<date>]`, in `conditions.js`):
   - **Map:** the club's courts drawn north-up, with nearby roads and buildings. The court outlines come from OpenStreetMap.
-  - **Sun:** where the sun is from 1pm to 6pm on the chosen date, worked out in the browser.
+  - **Sun:** where the sun is from 11am to 6pm on the chosen date, worked out in the browser. The tab opens on the current hour (11am before then, 6pm after).
   - **Wind:** an estimate for the club's courts for those hours, about 16 days ahead, and whether it blows down the court, across it or diagonally.
     - It starts from the ECMWF forecast (through Open-Meteo, free, no key) over open water in False Bay, at -34.30, 18.60.
     - It scales that by the club's terrain factor for the wind's direction. The factors come from the [Cape Town Wind Explorer](https://wind-analyzer.pages.dev/) terrain model, which shows how Table Mountain speeds the wind up or shelters each spot.

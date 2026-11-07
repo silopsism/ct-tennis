@@ -6,7 +6,7 @@
 // Shown on a club's Courts tab, and as a one-line forecast under upcoming fixtures.
 // Uses app.js globals (state, esc, splitTeam, slugify, today, fmtDate, renderPanel, writeHash) at run time.
 
-const COURT_HOURS = [13, 14, 15, 16, 17, 18]; // match afternoons, 1pm to 6pm
+const COURT_HOURS = [11, 12, 13, 14, 15, 16, 17, 18]; // match days, 11am to 6pm
 const SAST = 2; // UTC+2 all year
 const FORECAST_DAYS = 15; // Open-Meteo forecasts 16 days, today included
 const WIND_KEY = 'ctt-wind-v3';
@@ -18,7 +18,14 @@ const RAD = Math.PI / 180;
 const courts = { data: null, loading: false, wind: new Map(), windLoading: new Set() };
 
 const compass = (deg) => COMPASS[Math.round((((deg % 360) + 360) % 360) / 22.5) % 16];
-const hourLabel = (h) => `${h > 12 ? h - 12 : h}pm`;
+const hourLabel = (h) => (h < 12 ? `${h}am` : `${h > 12 ? h - 12 : h}pm`);
+const HOURS_TEXT = `${hourLabel(COURT_HOURS[0])} to ${hourLabel(COURT_HOURS[COURT_HOURS.length - 1])}`;
+
+// The hour it is now in Cape Town, kept within the match hours: what the Courts tab opens on.
+function currentHour() {
+  const h = new Date(Date.now() + SAST * 3600e3).getUTCHours();
+  return Math.min(Math.max(h, COURT_HOURS[0]), COURT_HOURS[COURT_HOURS.length - 1]);
+}
 const pad2 = (n) => String(n).padStart(2, '0');
 const isoDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 const daysAhead = (iso) => Math.round((Date.parse(iso) - Date.parse(isoDate(today()))) / 86400e3);
@@ -237,7 +244,7 @@ function courtsTabHTML(club) {
 
   const upcoming = homeDates(club);
   const iso = state.courtDate ?? upcoming[0]?.[0] ?? nextSaturday();
-  const hour = COURT_HOURS.includes(state.courtHour) ? state.courtHour : 15;
+  const hour = COURT_HOURS.includes(state.courtHour) ? state.courtHour : currentHour();
   const suns = COURT_HOURS.map((h) => ({ h, ...sunAt(localMs(iso, h), c.lat, c.lon) }));
   const sun = suns.find((s) => s.h === hour);
   const ahead = daysAhead(iso);
@@ -303,7 +310,7 @@ function courtsTabHTML(club) {
     </div>`;
 }
 
-// North-up map: courts and surroundings in a circle, a compass ring, the sun's path from 1pm to 6pm outside it,
+// North-up map: courts and surroundings in a circle, a compass ring, the sun's path through the match hours outside it,
 // sunlight across the courts and wind streaks drifting with the wind.
 function courtMapSVG(c, iso, suns, hour, w) {
   const f1 = (v) => Math.round(v * 10) / 10;
@@ -386,7 +393,7 @@ function courtMapSVG(c, iso, suns, hour, w) {
   }
 
   // The sun's path outside the ring: placed by direction, closer in the higher it is.
-  const rOf = (alt) => 136 - Math.min(Math.max(alt, 0), 90) / 90 * 20;
+  const rOf = (alt) => 141 - Math.min(Math.max(alt, 0), 90) / 90 * 18; // a midday sun stays clear of the N
   const at = (s, extra = 0) => [Math.sin(s.az * RAD) * (rOf(s.alt) + extra), -Math.cos(s.az * RAD) * (rOf(s.alt) + extra)];
   const fine = [];
   for (let t = COURT_HOURS[0]; t <= COURT_HOURS[COURT_HOURS.length - 1] + 1e-9; t += 0.25) {
@@ -408,7 +415,7 @@ function courtMapSVG(c, iso, suns, hour, w) {
   }
 
   return `<svg class="court-map" viewBox="-162 -158 324 316" role="img"
-    aria-label="Map of ${esc(c.name)}'s courts, north up, with the sun's path from 1pm to 6pm${w ? ' and the wind' : ''}">
+    aria-label="Map of ${esc(c.name)}'s courts, north up, with the sun's path from ${HOURS_TEXT}${w ? ' and the wind' : ''}">
     <defs><clipPath id="court-clip"><circle r="100"/></clipPath></defs>${out.join('')}</svg>`;
 }
 

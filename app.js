@@ -25,7 +25,7 @@ const state = {
   mode: 'leagues', clubs: new Map(), club: null, // "Clubs" view: all of one club's teams across leagues
   clubSort: { key: 'all', dir: -1 }, domWeights: [1],
   clubView: 'teams', // a club's tab: teams, courts (conditions.js) or about (ratings.js)
-  courtDate: null, courtHour: 15, // the Courts tab's date and hour
+  courtDate: null, courtHour: null, // the Courts tab's date and hour (null: the hour it is now)
   score: readPref(SCORE_KEY, ['matches', 'sets', 'points']) ?? 'matches',
   edits: readEdits(), // { fixtureId: { hm, am, hs, as } } — results entered on this device
   api: false, // true when served by server.js (salwood), which takes captains' submissions

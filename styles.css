@@ -1624,3 +1624,12 @@ button.r-chip { cursor: pointer; }
 }
 
 .r-banner figcaption a { color: inherit; }
+
+/* Eight hours in the Courts tab's table: tighter on phones so 11am to 6pm fits */
+@media (max-width: 480px) {
+  .court-strip { font-size: 11.5px; }
+  .court-strip th, .court-strip td { padding: 5px 0; }
+  .court-strip thead button { padding: 2px 0; }
+  .court-strip th[scope="row"] { padding-right: 4px; }
+  .court-strip .wind-arrow { width: 10px; height: 10px; }
+}
