@@ -29,6 +29,7 @@ const state = {
   score: readPref(SCORE_KEY, ['matches', 'sets', 'points']) ?? 'matches',
   edits: readEdits(), // { fixtureId: { hm, am, hs, as } } — results entered on this device
   api: false, // true when served by server.js (salwood), which takes captains' submissions
+  lastDiv: {}, // the division last shown in each competition, so switching back returns to it
   subs: {}, // { fixtureId: { hm, am, hs, as, status, side } } — submitted by captains, not yet in the sheet
 };
 
@@ -381,65 +382,149 @@ function pendingTag(f) {
   return '';
 }
 
-function renderNav() {
-  const modeRow = `
-    <div class="mode-row">
-      <div class="mini-toggle" role="group" aria-label="Browse by">
-        <button type="button" data-mode="leagues" aria-pressed="${state.mode === 'leagues'}">Leagues</button>
-        <button type="button" data-mode="clubs" aria-pressed="${state.mode === 'clubs'}">Clubs</button>
-        ${state.api ? `<button type="button" data-mode="submit" aria-pressed="${state.mode === 'submit'}">Submit a result</button>` : ''}
-      </div>
-    </div>`;
+// ---------- Club badges ----------
 
-  if (SUB_MODES.includes(state.mode)) {
-    $('divisions').innerHTML = modeRow;
-    return;
-  }
+// Each club gets a coloured badge with its initials. Colours are picked from the club's name so they stay
+// the same everywhere; set a club's own colour in CLUB_COLORS (by club slug) to override.
+const CLUB_COLORS = {};
+const BADGE_COLORS = ['#2f6fb3', '#2f8a57', '#7a4bb0', '#c0442f', '#b97a10', '#24868c', '#a83a6b', '#5f8a2a', '#b05a1e', '#56657d', '#8f6a2a', '#1d5f86'];
 
-  if (state.mode === 'clubs') {
-    $('divisions').innerHTML = modeRow + `
-      <label class="club-pick">
-        <span class="group-label">Club</span>
-        <select id="club-select">
-          <option value="">All clubs</option>
-          ${[...state.clubs.values()].map((c) => `
-            <option value="${c.slug}"${c.slug === state.club ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}
-        </select>
-      </label>`;
-    return;
-  }
+function badgeColor(club) {
+  const slug = slugify(club);
+  if (CLUB_COLORS[slug]) return CLUB_COLORS[slug];
+  let h = 0;
+  for (const ch of slug) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return BADGE_COLORS[h % BADGE_COLORS.length];
+}
 
+function badgeInitials(club) {
+  const words = club.split(/\s+/).filter(Boolean);
+  if (words.length > 1) return words.slice(0, 3).map((w) => w[0]).join('').toUpperCase();
+  return /^[A-Z]{2,4}$/.test(club) ? club : club.slice(0, 3).toUpperCase();
+}
+
+function clubBadge(club) {
+  return `<span class="badge" style="--club:${badgeColor(club)}" aria-hidden="true">${esc(badgeInitials(club))}</span>`;
+}
+
+// A team's last five results, oldest first: [{ res: 'W'|'D'|'L', opp, date }].
+function formOf(d, team) {
+  return d.fixtures.filter((f) => f.played && (f.home === team || f.away === team)).slice(-5).map((f) => {
+    const isHome = f.home === team;
+    return { res: f.result === 'D' ? 'D' : (f.result === 'H') === isHome ? 'W' : 'L', opp: isHome ? f.away : f.home, date: f.date };
+  });
+}
+
+function formHTML(form) {
+  const word = { W: 'Won', D: 'Drew', L: 'Lost' };
+  return form.length
+    ? `<span class="form">${form.map((r) => `<span class="pill ${r.res}" title="${word[r.res]} v ${esc(r.opp)}, ${fmtDate(r.date)}">${r.res}</span>`).join('')}</span>`
+    : '<span class="form none">–</span>';
+}
+
+// ---------- League bar ----------
+
+function leagueGroups() {
   const divs = [...state.model.values()];
   const groups = GROUPS.map((g) => ({ ...g, divs: divs.filter((d) => d.group === g.key) }));
   const other = divs.filter((d) => !GROUPS.some((g) => g.key === d.group));
   if (other.length) groups.push({ key: 'other', label: 'Other', divs: other });
+  for (const g of groups) g.divs.sort((a, b) => a.order - b.order);
+  return groups.filter((g) => g.divs.length);
+}
 
-  $('divisions').innerHTML = modeRow + groups.filter((g) => g.divs.length).map((g) => `
-    <div class="group" role="group" aria-label="${esc(g.label)}">
-      <div class="group-label">${esc(g.label)}</div>
-      <div class="group-buttons">
-        ${g.divs.sort((a, b) => a.order - b.order).map((d) => `
-          <button type="button" class="div-btn" data-slug="${d.slug}" aria-pressed="${d.slug === state.slug}"
-            title="${esc(d.name)}">${esc(d.label)}</button>`).join('')}
+const shortGroup = (label) => label.replace(/^(\w)\S*\s(\w).*$/, '$1$2').toUpperCase();
+
+function divisionTitle(d) {
+  return !GROUPS.some((g) => g.key === d.group) ? d.name
+    : d.label === 'Premier' ? 'Premier' : `Division ${d.label}`;
+}
+
+function renderNav() {
+  const sub = SUB_MODES.includes(state.mode);
+  const modes = `
+    <div class="modes" role="group" aria-label="Browse by">
+      <button type="button" data-mode="leagues" aria-pressed="${state.mode === 'leagues'}">Leagues</button>
+      <button type="button" data-mode="clubs" aria-pressed="${state.mode === 'clubs'}">Clubs</button>
+      ${state.api ? `<button type="button" data-mode="submit" aria-pressed="${sub}">Submit</button>` : ''}
+    </div>`;
+  const mini = `<button type="button" class="lb-mini" data-action="top" aria-label="Back to the top">
+      <svg class="ball" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15"/><path d="M4.5 6.5c6 4 6 15 0 19M27.5 6.5c-6 4-6 15 0 19"/></svg><span>CTTL</span></button>`;
+
+  if (sub) {
+    $('divisions').innerHTML = `<div class="lb-top">${mini}<span class="lb-fill"></span>${modes}</div>`;
+    return;
+  }
+
+  if (state.mode === 'clubs') {
+    $('divisions').innerHTML = `
+      <div class="lb-top">${mini}
+        <label class="club-pick">
+          <span class="visually-hidden">Club</span>
+          <select id="club-select">
+            <option value="">All clubs</option>
+            ${[...state.clubs.values()].map((c) => `
+              <option value="${c.slug}"${c.slug === state.club ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}
+          </select>
+        </label>
+        ${modes}
+      </div>`;
+    return;
+  }
+
+  const groups = leagueGroups();
+  const active = groups.find((g) => g.divs.some((d) => d.slug === state.slug)) ?? groups[0];
+  if (active) state.lastDiv[active.key] = state.slug;
+  $('divisions').innerHTML = `
+    <div class="lb-top">${mini}
+      <div class="comps" role="group" aria-label="Competition">
+        ${groups.map((g) => `
+          <button type="button" class="comp-btn" data-group="${g.key}" aria-pressed="${g === active}" title="${esc(g.label)}">
+            <span class="long">${esc(g.label)}</span><span class="short" aria-hidden="true">${esc(shortGroup(g.label))}</span>
+          </button>`).join('')}
       </div>
-    </div>`).join('');
+      ${modes}
+    </div>
+    <div class="div-row" role="group" aria-label="${esc(active?.label ?? 'Divisions')}">
+      ${(active?.divs ?? []).map((d) => `
+        <button type="button" class="div-btn" data-slug="${d.slug}" aria-pressed="${d.slug === state.slug}"
+          title="${esc(d.name)}">${esc(d.label)}</button>`).join('')}
+    </div>`;
+
+  // Keep the chosen division in view when the row scrolls sideways.
+  const row = document.querySelector('.div-row'), on = row?.querySelector('[aria-pressed="true"]');
+  if (on && (on.offsetLeft + on.offsetWidth > row.scrollLeft + row.clientWidth || on.offsetLeft < row.scrollLeft)) {
+    row.scrollLeft = on.offsetLeft - 8;
+  }
+}
+
+// Rows slide in when the page shows something new, not when a row is opened or the data refreshes.
+let lastPanel = '';
+function setContent(html) {
+  const key = [state.mode, state.slug, state.view, state.project, state.club, state.clubView].join('|');
+  const el = $('content');
+  el.innerHTML = html;
+  el.classList.toggle('enter', key !== lastPanel);
+  lastPanel = key;
 }
 
 function renderPanel() {
   if (SUB_MODES.includes(state.mode)) {
     const { title, html } = subPanel(); // submit.js
     $('panel').hidden = false;
+    $('division-kicker').textContent = '';
     $('division-title').textContent = title;
     document.querySelector('.tools').hidden = true;
     $('club-tools').hidden = true;
-    $('content').innerHTML = html;
+    setContent(html);
     return;
   }
 
   if (state.mode === 'clubs') {
     const c = state.clubs.get(state.club);
     $('panel').hidden = false;
-    $('division-title').textContent = c ? c.name : 'All clubs';
+    $('division-kicker').textContent = c ? `Club · ${ordinal(c.rank)} of ${state.clubs.size}` : 'Every club, every league';
+    $('division-title').innerHTML = c ? `${clubBadge(c.name)}${esc(c.name)}` : 'All clubs';
     document.querySelector('.tools').hidden = true;
     $('club-tools').hidden = !c;
     if (state.clubView === 'about' && !state.api) state.clubView = 'teams'; // ratings need the server
@@ -447,10 +532,10 @@ function renderPanel() {
       b.setAttribute('aria-selected', String(b.dataset.clubView === state.clubView));
       if (b.dataset.clubView === 'about') b.hidden = !state.api;
     }
-    $('content').innerHTML = !c ? clubsHTML()
+    setContent(!c ? clubsHTML()
       : state.clubView === 'courts' ? courtsTabHTML(c) // conditions.js
       : state.clubView === 'about' ? aboutTabHTML(c) // ratings.js
-      : localNote(contextFixtures()) + clubHTML(c);
+      : localNote(contextFixtures()) + clubHTML(c));
     return;
   }
 
@@ -458,16 +543,17 @@ function renderPanel() {
   $('panel').hidden = !d;
   $('club-tools').hidden = true;
   if (!d) return;
-  $('division-title').textContent = d.name;
+  $('division-kicker').textContent = GROUPS.find((g) => g.key === d.group)?.label ?? '';
+  $('division-title').textContent = divisionTitle(d);
   document.querySelector('.tools').hidden = false;
   for (const b of document.querySelectorAll('.toggle button')) {
     b.setAttribute('aria-selected', String(b.dataset.view === state.view));
   }
   $('wand').hidden = state.view !== 'weekly';
   $('wand').setAttribute('aria-pressed', String(state.project));
-  $('content').innerHTML = localNote(d.fixtures) + (state.view === 'fixtures' ? fixturesHTML(d)
+  setContent(localNote(d.fixtures) + (state.view === 'fixtures' ? fixturesHTML(d)
     : state.view === 'weekly' ? weeklyHTML(d)
-    : standingsHTML(d));
+    : standingsHTML(d)));
 }
 
 function localNote(fixtures) {
@@ -489,32 +575,35 @@ function contextFixtures() {
 
 function standingsHTML(d) {
   if (!d.table.length) return '<p class="empty">No teams yet.</p>';
+  const top = Math.max(1, ...d.table.map((t) => t.Pts));
   const rows = d.table.map((t, i) => {
     const diff = t.SF - t.SA;
     const open = t.team === state.openTeam;
+    const form = formHTML(formOf(d, t.team));
     return `
-      <tr class="team-row${open ? ' open' : ''}" data-team="${esc(t.team)}" tabindex="0" aria-expanded="${open}">
-        <td class="pos">${i + 1}</td>
-        <td class="team">${teamLabel(t.team)}<span class="chev" aria-hidden="true">›</span></td>
-        <td>${t.P}</td><td>${t.W}</td><td>${t.D}</td><td>${t.L}</td>
-        <td class="wide">${t.SF}</td><td class="wide">${t.SA}</td>
-        <td class="${diff > 0 ? 'diff-pos' : diff < 0 ? 'diff-neg' : ''}">${diff > 0 ? '+' : ''}${diff}</td>
-        <td class="pts">${t.Pts}</td>
+      <tr class="team-row${open ? ' open' : ''}" data-team="${esc(t.team)}" tabindex="0" aria-expanded="${open}" style="--i:${i}">
+        <td class="pos"><span class="rank${i < 3 && t.P ? ` r${i + 1}` : ''}">${i + 1}</span></td>
+        <td class="team"><div class="team-cell">${clubBadge(splitTeam(t.team).club)}<div class="team-txt"><span>${teamLabel(t.team)}<span class="chev" aria-hidden="true">›</span></span><span class="form-inline">${form}</span></div></div></td>
+        <td class="wide">${form}</td>
+        <td class="dim">${t.P}</td><td>${t.W}</td><td class="dim">${t.D}</td><td class="dim">${t.L}</td>
+        <td class="wide dim">${t.SF}</td><td class="wide dim">${t.SA}</td>
+        <td class="${diff > 0 ? 'diff-pos' : diff < 0 ? 'diff-neg' : ''}">${diff > 0 ? '+' : diff < 0 ? '−' : ''}${Math.abs(diff)}</td>
+        <td class="pts"><span class="pts-cell"><b>${t.Pts}</b><span class="pts-bar" aria-hidden="true"><span style="width:${Math.max(3, (100 * t.Pts) / top)}%"></span></span></span></td>
       </tr>
-      ${open ? `<tr class="team-detail"><td colspan="10">${teamFixturesHTML(d, t.team)}</td></tr>` : ''}`;
+      ${open ? `<tr class="team-detail"><td colspan="11">${teamFixturesHTML(d, t.team)}</td></tr>` : ''}`;
   }).join('');
 
   return `
-    <table class="standings">
+    <table class="standings league-table">
       <thead><tr>
-        <th>#</th><th class="team">Team</th>
+        <th>#</th><th class="team">Team</th><th class="wide" title="Last five results, newest on the right">Last 5</th>
         <th title="Played">P</th><th title="Won">W</th><th title="Drawn">D</th><th title="Lost">L</th>
         <th class="wide" title="Sets for">SF</th><th class="wide" title="Sets against">SA</th>
         <th title="Sets difference">+/−</th><th title="League points">Pts</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
-    <p class="hint">Tap a team to see its results. Ranked on league points, then sets difference.</p>`;
+    <p class="hint">Tap a team to see its results. Ranked on league points, then sets difference. Last 5 runs oldest to newest.</p>`;
 }
 
 function teamFixturesHTML(d, team) {
@@ -664,7 +753,7 @@ function clubsHTML() {
     return `
       <tr class="team-row club-row" data-club="${c.slug}" tabindex="0">
         <td class="pos">${i + 1}</td>
-        <td class="team"><span class="team-name">${esc(c.name)}</span><span class="chev" aria-hidden="true">›</span></td>
+        <td class="team"><div class="team-cell">${clubBadge(c.name)}<span class="team-name">${esc(c.name)}</span><span class="chev" aria-hidden="true">›</span></div></td>
         <td>${c.teams.length}</td>
         <td class="${s.top ? 'top-pos' : ''}">${s.top || '–'}</td>
         <td>${s.P ? `${Math.round((100 * s.W) / s.P)}%` : '–'}</td>
@@ -710,12 +799,7 @@ function clubHTML(c) {
     group = g?.key ?? group;
 
     const mine = t.d.fixtures.filter((f) => f.home === t.team || f.away === t.team);
-    const form = mine.filter((f) => f.played).slice(-5).map((f) => {
-      const isHome = f.home === t.team;
-      const res = f.result === 'D' ? 'D' : (f.result === 'H') === isHome ? 'W' : 'L';
-      const opp = isHome ? f.away : f.home;
-      return `<span class="pill ${res}" title="${{ W: 'Won', D: 'Drew', L: 'Lost' }[res]} v ${esc(opp)}, ${fmtDate(f.date)}">${res}</span>`;
-    }).join('');
+    const form = formHTML(formOf(t.d, t.team));
     const next = mine.find((f) => !f.played && f.date && f.date >= now);
     const nextHTML = next
       ? (() => {
@@ -732,7 +816,7 @@ function clubHTML(c) {
         <td class="${t.pos === 1 && t.P ? 'top-pos' : ''}">${ordinal(t.pos)} <small class="of">of ${t.of}</small></td>
         <td class="wide">${t.P}</td><td class="wide">${t.W}</td><td class="wide">${t.D}</td><td class="wide">${t.L}</td>
         <td class="pts">${t.Pts}</td>
-        <td><span class="form">${form || '–'}</span></td>
+        <td>${form}</td>
         <td class="wide next">${nextHTML}</td>
       </tr>`;
   }).join('');
@@ -891,9 +975,9 @@ function fixtureHTML(f) {
     .filter(Boolean).join(' ');
   return `
     <div class="fx">
-      <button type="button" class="fx-team home${cls('H')}" data-team="${esc(f.home)}">${teamLabel(f.home)}</button>
+      <button type="button" class="fx-team home${cls('H')}" data-team="${esc(f.home)}"><span class="fx-name">${teamLabel(f.home)}</span>${clubBadge(club(f.home))}</button>
       <div class="fx-mid">${mid}</div>
-      <button type="button" class="fx-team away${cls('A')}" data-team="${esc(f.away)}">${teamLabel(f.away)}</button>
+      <button type="button" class="fx-team away${cls('A')}" data-team="${esc(f.away)}">${clubBadge(club(f.away))}<span class="fx-name">${teamLabel(f.away)}</span></button>
       ${note ? `<div class="fx-note">${note}</div>` : ''}
       ${fixtureConditions(f) /* conditions.js */}
     </div>`;
@@ -1243,6 +1327,16 @@ document.addEventListener('click', (e) => {
   const btn = e.target.closest('.div-btn');
   if (btn) return select(btn.dataset.slug);
 
+  const comp = e.target.closest('.comp-btn');
+  if (comp) {
+    const g = leagueGroups().find((x) => x.key === comp.dataset.group);
+    if (!g) return;
+    const last = state.lastDiv[g.key];
+    return select(g.divs.some((d) => d.slug === last) ? last : g.divs[0].slug);
+  }
+
+  if (e.target.closest('[data-action="top"]')) return window.scrollTo({ top: 0, behavior: 'smooth' });
+
   const tab = e.target.closest('.toggle button[data-view]');
   if (tab) return select(state.slug, tab.dataset.view);
 
@@ -1327,6 +1421,11 @@ document.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('hashchange', applyHash);
+
+if ('IntersectionObserver' in window) {
+  new IntersectionObserver(([e]) => $('league-bar').classList.toggle('stuck', !e.isIntersecting))
+    .observe($('hero'));
+}
 
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && Date.now() - (state.fetchedAt ?? 0) > REFRESH_MS) refresh();

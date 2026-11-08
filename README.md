@@ -6,6 +6,9 @@ Live standings and fixture results, read straight from the **Results Entry** tab
 - The sheet must stay shared as "anyone with the link can view", and the Results Entry tab name and column headers must stay the same.
 - Standings are calculated from the results: a fixture counts once scores are entered; win/draw/loss is matches won, then sets won; points come from Home/Away Final Pts (so overrides apply). Ranked on points, then sets difference, then sets for.
 
+- **Look:** one dark "floodlit" theme (navy, court blue, ball yellow) with Barlow and Barlow Condensed from Google Fonts. The league bar stays pinned while scrolling: Men's/Ladies singles/doubles across the top, that competition's divisions underneath, and it goes back to the division last opened in each competition.
+- **Club badges:** every club gets its initials on a colour picked from its name. To give a club its own colour, add it to `CLUB_COLORS` in `app.js` (by club slug, e.g. `'camps-bay': '#0f5f93'`).
+- Standings show the top three as medals, each team's last five results, and a bar from each team's points to the leader's.
 - By week view: score shown as matches, sets or points; the wand projects the rest of the season (Bradley–Terry on sets won, walkovers excluded, home edge measured from all results).
 - Clubs view: every club's teams across all leagues. The all-clubs table sorts on any column, and ranks clubs on **dominance**. That is each team's share of the league points it could have won (×100), weighted by division. Divisions sit on one ladder per competition. Each overlaps the one above by 20%, 25%, 30%, 40%, 50%, then 60% going down (`DIVISION_OVERLAP`). A division's weight is the height of its middle on that ladder, squared (`WEIGHT_CURVE`). Lower divisions still count, but many weak teams can't outweigh a few strong ones.
 - **Courts tab** on each club page (`#/clubs/<club>/courts[/<date>]`, in `conditions.js`):
