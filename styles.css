@@ -525,7 +525,8 @@ h2 .badge { width: 34px; height: 34px; font-size: 12px; }
     position: sticky;
     left: 0;
     z-index: 1;
-    max-width: 150px;
+    min-width: 142px;
+    max-width: 160px;
     background: var(--surface);
     box-shadow: inset -1px 0 0 var(--line);
   }
@@ -533,8 +534,6 @@ h2 .badge { width: 34px; height: 34px; font-size: 12px; }
   .clubs-table .team-row:hover .team { background: var(--hover); }
 
   .clubs-table .team .chev { display: none; }
-
-  .clubs-table .team-name { overflow-wrap: anywhere; }
 }
 
 .club-link {
