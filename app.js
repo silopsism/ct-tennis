@@ -150,12 +150,18 @@ function buildModel(rows, edits = {}, subs = {}) {
     const d = divisions.get(slug);
     d.fixtures.push(f);
     for (const t of [home, away]) {
-      if (!d.teams.has(t)) d.teams.set(t, { team: t, P: 0, W: 0, D: 0, L: 0, SF: 0, SA: 0, Pts: 0 });
+      if (!d.teams.has(t)) d.teams.set(t, { team: t, P: 0, W: 0, D: 0, L: 0, MW: 0, SF: 0, SA: 0, Pts: 0, hSW: 0, hSP: 0, aSW: 0, aSP: 0 });
     }
     if (f.played) {
       const h = d.teams.get(home), a = d.teams.get(away);
-      tally(h, f.homeSets, f.awaySets, f.homePts, f.result === 'H' ? 'W' : f.result === 'A' ? 'L' : 'D');
-      tally(a, f.awaySets, f.homeSets, f.awayPts, f.result === 'A' ? 'W' : f.result === 'H' ? 'L' : 'D');
+      tally(h, f.homeSets, f.awaySets, f.homePts, f.result === 'H' ? 'W' : f.result === 'A' ? 'L' : 'D', f.homeMatches);
+      tally(a, f.awaySets, f.homeSets, f.awayPts, f.result === 'A' ? 'W' : f.result === 'H' ? 'L' : 'D', f.awayMatches);
+      // Sets won and played at home and away, for the clubs' home advantage. Walkovers don't count.
+      const sets = (f.homeSets ?? 0) + (f.awaySets ?? 0);
+      if (sets && !isDefault(f)) {
+        h.hSW += f.homeSets ?? 0; h.hSP += sets;
+        a.aSW += f.awaySets ?? 0; a.aSP += sets;
+      }
     }
   }
 
@@ -215,9 +221,10 @@ function abbreviations(teams) {
   }));
 }
 
-function tally(t, sf, sa, pts, res) {
+function tally(t, sf, sa, pts, res, mw) {
   t.P++;
   t[res]++;
+  t.MW += mw ?? 0;
   t.SF += sf ?? 0;
   t.SA += sa ?? 0;
   t.Pts += pts ?? 0;
@@ -347,7 +354,7 @@ function esc(s) {
 // "Claremont LDA" -> "Claremont" + muted "LDA"
 function teamLabel(name) {
   const { club, code } = splitTeam(name);
-  return `<span class="team-name">${esc(club)}</span>${code ? `<span class="code">${esc(code)}</span>` : ''}`;
+  return `<span class="team-name">${esc(club)}</span>${code ? ` <span class="code">${esc(code)}</span>` : ''}`;
 }
 
 function fmtDate(d, long) {
@@ -407,19 +414,17 @@ function clubBadge(club) {
   return `<span class="badge" style="--club:${badgeColor(club)}" aria-hidden="true">${esc(badgeInitials(club))}</span>`;
 }
 
-// A team's last five results, oldest first: [{ res: 'W'|'D'|'L', opp, date }].
-function formOf(d, team) {
-  return d.fixtures.filter((f) => f.played && (f.home === team || f.away === team)).slice(-5).map((f) => {
-    const isHome = f.home === team;
-    return { res: f.result === 'D' ? 'D' : (f.result === 'H') === isHome ? 'W' : 'L', opp: isHome ? f.away : f.home, date: f.date };
-  });
-}
-
-function formHTML(form) {
+// Every fixture of a team's season in date order: W, D or L once played, "–" until then.
+function resultsHTML(d, team) {
   const word = { W: 'Won', D: 'Drew', L: 'Lost' };
-  return form.length
-    ? `<span class="form">${form.map((r) => `<span class="pill ${r.res}" title="${word[r.res]} v ${esc(r.opp)}, ${fmtDate(r.date)}">${r.res}</span>`).join('')}</span>`
-    : '<span class="form none">–</span>';
+  const items = d.fixtures.filter((f) => f.home === team || f.away === team).map((f) => {
+    const isHome = f.home === team;
+    const opp = `${isHome ? 'v' : '@'} ${splitTeam(isHome ? f.away : f.home).club}, ${fmtDate(f.date)}`;
+    if (!f.played) return `<span class="r none" title="Not played yet: ${esc(opp)}">–</span>`;
+    const res = f.result === 'D' ? 'D' : (f.result === 'H') === isHome ? 'W' : 'L';
+    return `<span class="r ${res}" title="${word[res]} ${esc(opp)}">${res}</span>`;
+  });
+  return `<span class="results">${items.join('')}</span>`;
 }
 
 // ---------- League bar ----------
@@ -575,35 +580,29 @@ function contextFixtures() {
 
 function standingsHTML(d) {
   if (!d.table.length) return '<p class="empty">No teams yet.</p>';
-  const top = Math.max(1, ...d.table.map((t) => t.Pts));
   const rows = d.table.map((t, i) => {
-    const diff = t.SF - t.SA;
     const open = t.team === state.openTeam;
-    const form = formHTML(formOf(d, t.team));
     return `
       <tr class="team-row${open ? ' open' : ''}" data-team="${esc(t.team)}" tabindex="0" aria-expanded="${open}" style="--i:${i}">
         <td class="pos"><span class="rank${i < 3 && t.P ? ` r${i + 1}` : ''}">${i + 1}</span></td>
-        <td class="team"><div class="team-cell">${clubBadge(splitTeam(t.team).club)}<div class="team-txt"><span>${teamLabel(t.team)}<span class="chev" aria-hidden="true">›</span></span><span class="form-inline">${form}</span></div></div></td>
-        <td class="wide">${form}</td>
+        <td class="team"><div class="team-cell">${clubBadge(splitTeam(t.team).club)}<span>${teamLabel(t.team)}<span class="chev" aria-hidden="true">›</span></span></div></td>
         <td class="dim">${t.P}</td><td>${t.W}</td><td class="dim">${t.D}</td><td class="dim">${t.L}</td>
-        <td class="wide dim">${t.SF}</td><td class="wide dim">${t.SA}</td>
-        <td class="${diff > 0 ? 'diff-pos' : diff < 0 ? 'diff-neg' : ''}">${diff > 0 ? '+' : diff < 0 ? '−' : ''}${Math.abs(diff)}</td>
-        <td class="pts"><span class="pts-cell"><b>${t.Pts}</b><span class="pts-bar" aria-hidden="true"><span style="width:${Math.max(3, (100 * t.Pts) / top)}%"></span></span></span></td>
+        <td class="split">${t.MW}</td><td>${t.SF}</td>
+        <td class="pts"><b>${t.Pts}</b></td>
       </tr>
-      ${open ? `<tr class="team-detail"><td colspan="11">${teamFixturesHTML(d, t.team)}</td></tr>` : ''}`;
+      ${open ? `<tr class="team-detail"><td colspan="9">${teamFixturesHTML(d, t.team)}</td></tr>` : ''}`;
   }).join('');
 
   return `
     <table class="standings league-table">
       <thead><tr>
-        <th>#</th><th class="team">Team</th><th class="wide" title="Last five results, newest on the right">Last 5</th>
+        <th>#</th><th class="team">Team</th>
         <th title="Played">P</th><th title="Won">W</th><th title="Drawn">D</th><th title="Lost">L</th>
-        <th class="wide" title="Sets for">SF</th><th class="wide" title="Sets against">SA</th>
-        <th title="Sets difference">+/−</th><th title="League points">Pts</th>
+        <th class="split" title="Matches won">MW</th><th title="Sets won">SW</th><th title="League points">Pts</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
-    <p class="hint">Tap a team to see its results. Ranked on league points, then sets difference. Last 5 runs oldest to newest.</p>`;
+    <p class="hint">Tap a team to see its results. MW is matches won, SW sets won. Ranked on league points, then sets won minus sets lost.</p>`;
 }
 
 function teamFixturesHTML(d, team) {
@@ -710,10 +709,16 @@ function divisionTiers(model) {
   return tiers;
 }
 
+// Home advantage: the share of sets a club wins at home over the share it wins away (1.24 = 24% better at home).
+// Shares rather than totals, so a club that has played more home fixtures than away ones isn't flattered.
+function homeAdvantage(s) {
+  return s.hSP && s.aSP && s.aSW ? (s.hSW / s.hSP) / (s.aSW / s.aSP) : -1;
+}
+
 function clubTotals(c) {
-  const s = { P: 0, W: 0, D: 0, L: 0, top: 0 };
+  const s = { P: 0, W: 0, D: 0, L: 0, top: 0, hSW: 0, hSP: 0, aSW: 0, aSP: 0 };
   for (const t of c.teams) {
-    for (const k of ['P', 'W', 'D', 'L']) s[k] += t[k];
+    for (const k of ['P', 'W', 'D', 'L', 'hSW', 'hSP', 'aSW', 'aSP']) s[k] += t[k];
     if (t.pos === 1 && t.P > 0) s.top++;
   }
   return s;
@@ -725,7 +730,7 @@ const CLUB_COLUMNS = [
   { key: 'name', label: 'Club', title: 'Club name', value: (c) => c.name },
   { key: 'teams', label: 'Teams', title: 'Teams in the league', value: (c) => c.teams.length },
   { key: 'top', label: '1st', title: 'Teams currently top of their league', value: (c) => c.totals.top },
-  { key: 'win', label: 'Win %', title: 'Share of fixtures won', value: (c) => (c.totals.P ? c.totals.W / c.totals.P : -1) },
+  { key: 'hadv', label: 'HAdv', title: 'Home advantage: share of sets won at home ÷ share won away', value: (c) => homeAdvantage(c.totals) },
   { key: 'all', label: 'All', title: 'Dominance across all competitions', value: (c) => c.dom.all, dom: true },
   ...GROUPS.map((g) => ({
     key: g.key,
@@ -756,7 +761,7 @@ function clubsHTML() {
         <td class="team"><div class="team-cell">${clubBadge(c.name)}<span class="team-name">${esc(c.name)}</span><span class="chev" aria-hidden="true">›</span></div></td>
         <td>${c.teams.length}</td>
         <td class="${s.top ? 'top-pos' : ''}">${s.top || '–'}</td>
-        <td>${s.P ? `${Math.round((100 * s.W) / s.P)}%` : '–'}</td>
+        <td class="${homeAdvantage(s) > 1 ? 'hadv-up' : homeAdvantage(s) >= 0 ? 'hadv-down' : ''}">${homeAdvantage(s) >= 0 ? homeAdvantage(s).toFixed(2) : '–'}</td>
         <td class="pts dom-start">${dom(c.dom.all)}</td>
         ${GROUPS.map((g) => `<td class="dom-sub">${dom(c.dom[g.key])}</td>`).join('')}
       </tr>`;
@@ -781,6 +786,8 @@ function clubsHTML() {
       </table>
     </div>
     <p class="hint">Tap a heading to sort, or a club to see all its teams. "1st" counts teams currently top of their league.</p>
+    <p class="hint"><strong>HAdv</strong> is home advantage: the share of sets a club wins at home divided by the share it
+      wins away. 1.24 means it wins 24% more of its sets at home; below 1, it does better away. Walkovers are left out.</p>
     <p class="hint"><strong>Dominance</strong> adds up each team's share of the league points it could have won (a perfect
       record in a top division scores 100), weighted by division. Divisions overlap in strength, more so lower down
       (${DIVISION_OVERLAP.map((o) => `${Math.round(o * 100)}%`).join(', ')} going down), so the weights from the top are
@@ -789,35 +796,21 @@ function clubsHTML() {
 
 function clubHTML(c) {
   const s = clubTotals(c);
-  const now = today();
   let group = null;
   const rows = c.teams.map((t) => {
     const g = GROUPS.find((x) => x.key === t.d.group);
     const head = g && g.key !== group
-      ? `<tr class="grp"><th colspan="9">${esc(g.label)}</th></tr>`
+      ? `<tr class="grp"><th colspan="3">${esc(g.label)}</th></tr>`
       : '';
     group = g?.key ?? group;
 
-    const mine = t.d.fixtures.filter((f) => f.home === t.team || f.away === t.team);
-    const form = formHTML(formOf(t.d, t.team));
-    const next = mine.find((f) => !f.played && f.date && f.date >= now);
-    const nextHTML = next
-      ? (() => {
-        const isHome = next.home === t.team;
-        const opp = isHome ? next.away : next.home;
-        return `<span title="${esc(opp)} (${isHome ? 'home' : 'away'})">${isHome ? 'v' : '@'} ${esc(t.d.abbr.get(opp) ?? opp)}</span> <small>${fmtDate(next.date)}</small>`;
-      })()
-      : '–';
     const league = t.d.label === 'Premier' ? 'Premier' : `Division ${t.d.label}`;
 
     return `${head}
       <tr class="team-row" data-goto="${t.d.slug}" data-team="${esc(t.team)}" tabindex="0" title="Open ${esc(t.d.name)}">
-        <td class="team"><span class="team-name">${esc(league)}</span>${t.code ? `<span class="code">${esc(t.code)}</span>` : ''}<span class="chev" aria-hidden="true">›</span></td>
+        <td class="team"><span class="team-name">${esc(league)}</span>${t.code ? ` <span class="code">${esc(t.code)}</span>` : ''}<span class="chev" aria-hidden="true">›</span></td>
         <td class="${t.pos === 1 && t.P ? 'top-pos' : ''}">${ordinal(t.pos)} <small class="of">of ${t.of}</small></td>
-        <td class="wide">${t.P}</td><td class="wide">${t.W}</td><td class="wide">${t.D}</td><td class="wide">${t.L}</td>
-        <td class="pts">${t.Pts}</td>
-        <td>${form}</td>
-        <td class="wide next">${nextHTML}</td>
+        <td class="res">${resultsHTML(t.d, t.team)}</td>
       </tr>`;
   }).join('');
 
@@ -831,14 +824,11 @@ function clubHTML(c) {
     <table class="standings club-teams">
       <thead><tr>
         <th class="team">League</th><th>Position</th>
-        <th class="wide" title="Played">P</th><th class="wide" title="Won">W</th>
-        <th class="wide" title="Drawn">D</th><th class="wide" title="Lost">L</th>
-        <th title="League points">Pts</th><th title="Last five results, oldest first">Form</th>
-        <th class="wide">Next</th>
+        <th class="res" title="Every fixture this season, in date order">Results</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
-    <p class="hint">Tap a team to open its league. Form shows the last five results, oldest first.</p>`;
+    <p class="hint">Tap a team to open its league. Results runs through the season in date order: W won, D drew, L lost, – not played yet.</p>`;
 }
 
 // Standings rows with one column per round: opponent code + match score, coloured by result.

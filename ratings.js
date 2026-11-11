@@ -18,6 +18,8 @@ const STAR_ITEMS = [
   ['kitchen', 'Kitchen'], ['courts', 'Court quality'], ['shade', 'Shade & courtside seating'],
   ['seating', 'Outside seating'], ['hospitality', 'Hospitality'],
 ];
+// Wind protection is out of 5 (the others are out of 3): it cuts the wind forecast on the Courts tab (conditions.js).
+const WIND_ITEM = ['wind', 'Wind protected'];
 const VIBES = [['😐', 'Quiet'], ['🙂', 'Friendly'], ['🔥', 'Buzzing']];
 
 const clubInfo = { data: null, loading: false };
@@ -26,7 +28,7 @@ const ratingAdmin = { list: null, error: '' };
 
 // Only redraw pages that show ratings; never a half-filled score form.
 function redrawRatings() {
-  if (['clubs', 'submit', 'confirm', 'admin'].includes(state.mode)) renderPanel();
+  if (['leagues', 'clubs', 'submit', 'confirm', 'admin'].includes(state.mode)) renderPanel(); // leagues: fixture wind lines
 }
 
 async function loadClubInfo(force) {
@@ -65,12 +67,13 @@ function ratingHTML(fixture) {
       <p><a class="s-link" href="#/clubs/${r.slug}/about">See ${esc(r.club)}'s page</a></p></section>`;
   }
   const facts = known(r.slug);
-  const starRow = ([k, label]) => {
+  const starRow = ([k, label], max = 3) => {
     const v = r.stars[k];
-    const buttons = [1, 2, 3].map((n) => `<button type="button" class="r-star${v >= n ? ' on' : ''}" data-r="star" data-k="${k}" data-v="${n}"
-      aria-label="${label}: ${n} of 3" aria-pressed="${v === n}">★</button>`).join('');
+    const buttons = Array.from({ length: max }, (_, i) => i + 1).map((n) => `<button type="button" class="r-star${v >= n ? ' on' : ''}" data-r="star" data-k="${k}" data-v="${n}"
+      aria-label="${label}: ${n} of ${max}" aria-pressed="${v === n}">★</button>`).join('');
     const none = k === 'kitchen' ? `<button type="button" class="r-none" data-r="star" data-k="kitchen" data-v="0" aria-pressed="${v === 0}">None</button>` : '';
-    return `<div class="r-row"><span>${label}</span><span class="r-pick">${none}${buttons}</span></div>`;
+    const note = k === 'wind' ? ' <small class="s-note">1 exposed, 5 sheltered</small>' : '';
+    return `<div class="r-row"><span>${label}${note}</span><span class="r-pick">${none}${buttons}</span></div>`;
   };
   const chip = ([k, label]) => {
     const v = k in r.ticks ? r.ticks[k] : facts[k] ?? null;
@@ -83,7 +86,8 @@ function ratingHTML(fixture) {
     <section class="r-card">
       <h3>How was ${esc(r.club)}?</h3>
       <p class="s-note">Optional. It helps other teams know what to expect.</p>
-      ${STAR_ITEMS.map(starRow).join('')}
+      ${STAR_ITEMS.map((x) => starRow(x)).join('')}
+      ${starRow(WIND_ITEM, 5)}
       <div class="r-row"><span>Vibes</span><span class="r-pick">${VIBES.map(([e, label], i) => `
         <button type="button" class="r-vibe${r.vibe === i + 1 ? ' on' : ''}" data-r="vibe" data-v="${i + 1}" aria-pressed="${r.vibe === i + 1}" title="${label}">${e}</button>`).join('')}</span></div>
       <p class="r-label">Facilities <span class="s-note">tap to mark yes, again for no</span></p>
@@ -115,7 +119,7 @@ async function sendRating() {
 
 // ---------- About tab ----------
 
-const starsHTML = (avg) => `<span class="r-stars" style="--v:${avg}" role="img" aria-label="${avg.toFixed(1)} out of 3">★★★</span>`;
+const starsHTML = (avg, max = 3) => `<span class="r-stars" style="--v:${avg};--max:${max}" role="img" aria-label="${avg.toFixed(1)} out of ${max}">${'★'.repeat(max)}</span>`;
 const mapsLink = (club) => {
   const c = typeof courts !== 'undefined' ? courts.data?.[club.slug] : null; // conditions.js
   const q = c ? `${c.lat},${c.lon}` : `${club.name} tennis club, Cape Town`;
@@ -158,7 +162,11 @@ function aboutTabHTML(club) {
     if (k === 'kitchen' && c.noKitchen > (s?.n ?? 0)) return `<tr><th scope="row">${label}</th><td colspan="2">No kitchen</td></tr>`;
     return `<tr><th scope="row">${label}</th><td>${s ? starsHTML(s.avg) : '<span class="s-note">Not rated</span>'}</td>
       <td class="r-n">${s ? s.n : ''}</td></tr>`;
-  }).join('');
+  }).join('') + (() => {
+    const s = c.stars.wind;
+    return `<tr><th scope="row">${WIND_ITEM[1]}</th><td>${s ? starsHTML(s.avg, 5) : '<span class="s-note">Not rated</span>'}</td>
+      <td class="r-n">${s ? (s.n || 'league') : ''}</td></tr>`;
+  })();
 
   const yes = FACILITIES.filter(([k]) => c.facilities[k] === true);
   const no = FACILITIES.filter(([k]) => c.facilities[k] === false);
@@ -177,7 +185,7 @@ function aboutTabHTML(club) {
     ${head}
     ${maps}
     <h3 class="r-h">Ratings</h3>
-    ${c.n ? `<table class="r-table"><tbody>${rows}</tbody></table>` : '<p class="s-note">No ratings yet.</p>'}
+    ${c.n || c.stars.wind ? `<table class="r-table"><tbody>${rows}</tbody></table>` : '<p class="s-note">No ratings yet.</p>'}
     <h3 class="r-h">Facilities</h3>
     ${facilities}
     <h3 class="r-h">What visitors say</h3>
@@ -202,7 +210,7 @@ async function loadRatingsAdmin() {
 function ratingsAdminHTML() {
   const list = ratingAdmin.list;
   if (!list?.length) return ratingAdmin.error ? `<p class="s-error">${esc(ratingAdmin.error)}</p>` : '';
-  const label = Object.fromEntries([...FACILITIES, ...STAR_ITEMS]);
+  const label = Object.fromEntries([...FACILITIES, ...STAR_ITEMS, WIND_ITEM]);
   const yn = (v) => (v === true ? 'yes' : v === false ? 'no' : 'not known');
   const host = (url) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return 'source'; } };
   const researchCard = (x) => {

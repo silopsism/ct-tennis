@@ -1,8 +1,8 @@
 // Court conditions: each club's court layout (courts.json, built by tools/courts.js), the wind forecast for
 // match afternoons and where the sun is (calculated here).
-// Wind: the ECMWF forecast (via Open-Meteo, free, no key) over open water in False Bay, scaled for each club by
-// its terrain factors (tools/terrain.js, from the Cape Town Wind Explorer model). A club without factors gets
-// the forecast at its own location instead.
+// Wind and temperature: the ECMWF forecast (via Open-Meteo, free, no key) at each club's courts. The forecast can't
+// see the hills, trees and walls that shelter some courts, so the wind is cut by how wind-protected visiting captains
+// rate the club (ratings.js): 1 star leaves it as forecast, each star more takes off another 17.5%, up to 70% at 5.
 // Shown on a club's Courts tab, and as a one-line forecast under upcoming fixtures.
 // Uses app.js globals (state, esc, splitTeam, slugify, today, fmtDate, renderPanel, writeHash) at run time.
 
@@ -10,11 +10,10 @@ const COURT_HOURS = [11, 12, 13, 14, 15, 16, 17, 18]; // match days, 11am to 6pm
 const SAST = 2; // UTC+2 all year
 const FORECAST_DAYS = 15; // Open-Meteo forecasts 16 days, today included
 // Saved forecasts hold only the match hours, so the key names them: changing the hours drops the old ones.
-const WIND_KEY = `ctt-wind-v3-${COURT_HOURS[0]}-${COURT_HOURS[COURT_HOURS.length - 1]}`;
+const WIND_KEY = `ctt-wind-v4-${COURT_HOURS[0]}-${COURT_HOURS[COURT_HOURS.length - 1]}`;
 try {
   for (const k of Object.keys(localStorage)) if (k.startsWith('ctt-wind-') && k !== WIND_KEY) localStorage.removeItem(k);
 } catch { /* storage unavailable */ }
-const OPEN_WATER = { lat: -34.30, lon: 18.60 }; // the terrain model's inflow point, in False Bay
 const WIND_TTL = 60 * 60 * 1000;
 const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 const RAD = Math.PI / 180;
@@ -63,8 +62,7 @@ function saveWindCache(iso, data) {
   } catch { /* storage unavailable */ }
 }
 
-// One day's forecast for the match hours: { open: { 13: { speed, from, gust }, … }, <slug>: {…}, … } for the open-water
-// point and at every club. Null while loading or out of range; {} if it couldn't be had.
+// One day's forecast for the match hours at every club: { <slug>: { 13: { speed, from, gust, temp }, … }, … }. Null while loading or out of range; {} if it couldn't be had.
 function windFor(iso) {
   if (courts.wind.has(iso)) return courts.wind.get(iso);
   const cached = readWindCache()[iso];
@@ -74,13 +72,13 @@ function windFor(iso) {
   }
   const ahead = daysAhead(iso);
   if (!courts.data || courts.windLoading.has(iso) || ahead > FORECAST_DAYS || ahead < -60) return null;
-  const slugs = ['open', ...Object.keys(courts.data)];
-  const at = (s) => (s === 'open' ? OPEN_WATER : courts.data[s]);
+  const slugs = Object.keys(courts.data);
+  const at = (s) => courts.data[s];
   courts.windLoading.add(iso);
   const q = new URLSearchParams({
     latitude: slugs.map((s) => at(s).lat).join(','),
     longitude: slugs.map((s) => at(s).lon).join(','),
-    hourly: 'wind_speed_10m,wind_direction_10m,wind_gusts_10m',
+    hourly: 'wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m',
     models: 'ecmwf_ifs',
     timezone: 'Africa/Johannesburg', start_date: iso, end_date: iso,
   });
@@ -95,7 +93,10 @@ function windFor(iso) {
         for (const h of COURT_HOURS) {
           const k = t.indexOf(`${iso}T${pad2(h)}:00`);
           if (k >= 0 && loc.hourly.wind_speed_10m[k] != null) {
-            hours[h] = { speed: loc.hourly.wind_speed_10m[k], from: loc.hourly.wind_direction_10m[k], gust: loc.hourly.wind_gusts_10m[k] };
+            hours[h] = {
+              speed: loc.hourly.wind_speed_10m[k], from: loc.hourly.wind_direction_10m[k], gust: loc.hourly.wind_gusts_10m[k],
+              temp: loc.hourly.temperature_2m?.[k] ?? null,
+            };
           }
         }
         if (slugs[i]) out[slugs[i]] = hours;
@@ -108,25 +109,26 @@ function windFor(iso) {
   return null;
 }
 
-// The wind at a club's courts for each match hour: { 13: { speed, from, gust, open, share }, … }.
-// With terrain factors it's the open-water forecast scaled and turned for the direction it blows from
-// (between the model's 16 directions, in proportion); `open` is that forecast and `share` the factor.
-// Gusts: the terrain model's gustiness is calibrated over the sea, so it's kept only where it's gustier
-// than the land forecast at the club (lee rotors); otherwise the land forecast's gust-to-wind ratio is used.
+// How wind-protected visiting captains rate a club: { avg, n, league } on 1–5, or null. The league can set a
+// starting value (club-facts.json) that shows until captains have rated it.
+function windProtection(slug) {
+  if (typeof clubInfo === 'undefined') return null; // ratings.js
+  loadClubInfo();
+  return clubInfo.data?.[slug]?.stars?.wind ?? null;
+}
+
+const SHELTER_PER_STAR = 0.175; // 5 stars: 70% less wind than forecast
+
+// The wind at a club's courts for each match hour: { 13: { speed, from, gust, temp, forecast, cut }, … }.
+// `forecast` is the wind as forecast there and `cut` the share taken off for the club's wind protection.
 function clubWind(slug, all) {
-  const c = courts.data?.[slug];
-  if (!all || !c) return null;
-  if (!c.terrain) return all[slug] ?? null;
-  if (!all.open) return null;
+  const hours = all?.[slug];
+  if (!hours) return null;
+  const p = windProtection(slug);
+  const cut = p ? Math.min(0.7, Math.max(0, (p.avg - 1) * SHELTER_PER_STAR)) : 0;
   const out = {};
-  for (const [h, o] of Object.entries(all.open)) {
-    const pos = (((o.from % 360) + 360) % 360) / 22.5;
-    const i = Math.floor(pos) % 16, j = (i + 1) % 16, t = pos - Math.floor(pos);
-    const mix = (k) => c.terrain[i][k] * (1 - t) + c.terrain[j][k] * t;
-    const speed = o.speed * mix(0);
-    const land = all[slug]?.[h];
-    const gustiness = Math.max(land?.speed > 1 ? land.gust / land.speed : 0, o.speed > 1 ? (o.gust * mix(1)) / speed : 0);
-    out[h] = { speed, gust: speed * (gustiness || 1), from: (o.from + mix(2) + 360) % 360, open: o, share: mix(0) };
+  for (const [h, w] of Object.entries(hours)) {
+    out[h] = { ...w, speed: w.speed * (1 - cut), gust: w.gust * (1 - cut), forecast: w, cut };
   }
   return out;
 }
@@ -191,6 +193,17 @@ function arrowSVG(toDeg, size) {
   return `<svg class="wind-arrow" width="${size}" height="${size}" viewBox="-10 -10 20 20" aria-hidden="true"><path transform="rotate(${Math.round(toDeg)})" d="M0 -8V7M-4.5 -3L0 -8 4.5 -3"/></svg>`;
 }
 
+// Where the wind figure comes from: the forecast, and how much the club's wind protection takes off.
+function windBasis(club, w) {
+  const p = windProtection(club.slug);
+  const raw = `${Math.round(w.forecast.speed)} km/h`;
+  if (!p) return `Forecast for these courts. No visiting captain has rated how wind-protected they are yet, so it isn't cut for shelter.`;
+  const by = p.n ? `Visiting captains rate them ${p.avg.toFixed(1).replace(/.0$/, '')} out of 5` : `The league rates them ${p.avg} out of 5`;
+  return w.cut
+    ? `Forecast ${raw}. ${by} for wind protection, so it's cut by ${Math.round(w.cut * 100)}%.`
+    : `Forecast ${raw}. ${by} for wind protection: fully exposed.`;
+}
+
 // ---------- Fixture line ----------
 
 // One line under an upcoming fixture: wind for the afternoon at the home club, and any low sun. Links to the Courts tab.
@@ -212,10 +225,15 @@ function fixtureConditions(f) {
     const way = { down: 'down the courts', across: 'across the courts', diagonal: 'diagonal' }[windWay(c, peak).way];
     parts.push(`${arrowSVG((peak.from + 180) % 360, 12)} ${compass(peak.from)} ${lo === hi ? lo : `${lo}–${hi}`} km/h ${way}, gusts ${Math.round(Math.max(...ws.map((w) => w.gust)))}`);
   }
+  const temps = ws.map((w) => w.temp).filter((t) => t != null);
+  if (temps.length) {
+    const lo = Math.round(Math.min(...temps)), hi = Math.round(Math.max(...temps));
+    parts.push(`${lo === hi ? lo : `${lo}–${hi}`}°C`);
+  }
   const glare = COURT_HOURS.filter((h) => glareEnd(c, sunAt(localMs(iso, h), c.lat, c.lon)));
   if (glare.length) parts.push(`low sun ${hourLabel(glare[0])}${glare.length > 1 ? `–${hourLabel(glare[glare.length - 1])}` : ''}`);
   const text = parts.length ? parts.join(' · ') : 'Courts, sun and wind';
-  return `<a class="fx-cond" href="#/clubs/${slug}/courts/${iso}" title="Courts, sun and wind at ${esc(c.name)}">${text} ›</a>`;
+  return `<a class="fx-cond" href="#/clubs/${slug}/courts/${iso}" title="Courts, sun, wind and temperature at ${esc(c.name)}">${text} ›</a>`;
 }
 
 // ---------- Courts tab ----------
@@ -276,6 +294,7 @@ function courtsTabHTML(club) {
           ? `<span${glareEnd(c, s) ? ' class="glare" title="Low and in line with the courts"' : ''}>${Math.round(s.alt)}° ${compass(s.az)}</span>` : 'set'}</td>`).join('')}</tr>
         <tr><th scope="row">Wind</th>${COURT_HOURS.map((h) => { const x = hours?.[h]; return `<td${col(h)}>${x ? `${arrowSVG((x.from + 180) % 360, 12)} ${Math.round(x.speed)}` : '–'}</td>`; }).join('')}</tr>
         <tr><th scope="row">Gusts</th>${COURT_HOURS.map((h) => { const x = hours?.[h]; return `<td${col(h)}>${x ? Math.round(x.gust) : '–'}</td>`; }).join('')}</tr>
+        <tr><th scope="row">Temp</th>${COURT_HOURS.map((h) => { const x = hours?.[h]; return `<td${col(h)}>${x?.temp != null ? `${Math.round(x.temp)}°` : '–'}</td>`; }).join('')}</tr>
       </tbody>
     </table>`;
 
@@ -296,21 +315,19 @@ function courtsTabHTML(club) {
           <h3>Wind</h3>
           <div class="big">${w ? `${arrowSVG((w.from + 180) % 360, 18)} ${Math.round(w.speed)} km/h ${compass(w.from)}` : '–'}</div>
           <p>${w ? `${windWord(w.speed)}, gusting ${Math.round(w.gust)}. ${windText(c, w)}` : esc(windMsg)}</p>
-          ${w ? `<p class="wind-basis">${w.open
-            ? `Estimated for these courts: ${Math.round(w.share * 100)}% of the ${Math.round(w.open.speed)} km/h ${compass(w.open.from)} forecast over open water.`
-            : 'Forecast for this part of Cape Town.'}</p>` : ''}
+          ${w ? `<p class="wind-basis">${windBasis(club, w)}</p>` : ''}
         </div>
         <div>
           <h3>Sun at ${hourLabel(hour)}</h3>
           <div class="big">${sun.alt > 0 ? `${Math.round(sun.alt)}° up in the ${compass(sun.az)}` : 'Below the horizon'}</div>
           <p>${sunText(c, sun)}</p>
+          ${w?.temp != null ? `<p class="temp"><strong>${Math.round(w.temp)}°C</strong> in the shade.</p>` : ''}
         </div>
       </div>
       ${strip}
-      <p class="hint">Court outlines from OpenStreetMap. Wind is the ECMWF forecast (via Open-Meteo) over open water in
-        False Bay, scaled for how the terrain around these courts speeds it up or shelters it, using the
-        <a href="https://wind-analyzer.pages.dev/" target="_blank" rel="noopener">Cape Town Wind Explorer</a> model.
-        It's an estimate: trees, walls and clubhouses aren't in it. The sun is worked out for the date.</p>
+      <p class="hint">Court outlines from OpenStreetMap. Wind and temperature are the ECMWF forecast (via Open-Meteo) for
+        these courts. The forecast can't see the hills, trees and walls around them, so the wind is cut by how
+        wind-protected visiting captains rate the club: nothing at 1 star, up to 70% at 5. The sun is worked out for the date.</p>
     </div>`;
 }
 

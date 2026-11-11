@@ -405,7 +405,9 @@ function confirmView(s, f) {
 const CLUBS_FILE = path.join(DATA_DIR, 'clubs.json');
 const FACILITIES = ['practice_wall', 'shop', 'floodlights', 'change_rooms', 'parking', 'bar', 'braai', 'kids',
   'ball_machine', 'coaching', 'cards', 'wheelchair'];
-const STARS = ['kitchen', 'courts', 'shade', 'seating', 'hospitality']; // kitchen 0 = no kitchen
+const STARS = ['kitchen', 'courts', 'shade', 'seating', 'hospitality']; // out of 3; kitchen 0 = no kitchen
+// Wind protection, out of 5: it cuts the wind forecast on the Courts tab. club-facts.json can give a club a starting
+// value ("wind": 5) that shows until captains have rated it.
 const COMMENTS_SHOWN = 8;
 
 const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -462,6 +464,8 @@ function rate(body) {
     const v = Number(body.stars?.[k]);
     if (Number.isInteger(v) && v >= (k === 'kitchen' ? 0 : 1) && v <= 3) stars[k] = v;
   }
+  const wind = Number(body.stars?.wind);
+  if (Number.isInteger(wind) && wind >= 1 && wind <= 5) stars.wind = wind;
   const vibe = [1, 2, 3].includes(Number(body.vibe)) ? Number(body.vibe) : null;
   const ticks = {};
   for (const k of FACILITIES) if (typeof body.ticks?.[k] === 'boolean') ticks[k] = body.ticks[k];
@@ -504,6 +508,9 @@ function clubSummaries() {
     c.comments = c.comments.sort((a, b) => b.at.localeCompare(a.at)).slice(0, COMMENTS_SHOWN).map((x) => ({ text: x.text, at: x.at.slice(0, 10) }));
     c.stars = Object.fromEntries(Object.entries(c.stars).map(([k, s]) => [k, { avg: +(s.sum / s.n).toFixed(2), n: s.n }]));
     c.vibe = c.vibe.n ? { avg: +(c.vibe.sum / c.vibe.n).toFixed(2), n: c.vibe.n } : null;
+  }
+  for (const [slug, x] of Object.entries(RESEARCH)) {
+    if (!out[slug].stars.wind && Number(x.wind) >= 1 && Number(x.wind) <= 5) out[slug].stars.wind = { avg: Number(x.wind), n: 0 };
   }
   return out;
 }

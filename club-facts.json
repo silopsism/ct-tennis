@@ -147,7 +147,8 @@
    "page": "https://www.claremonttennis.co.za",
    "shows": "blue hard courts with players and the Table Mountain range behind (1280x960; home page slider)",
    "focus": "50% 90%"
-  }
+  },
+  "wind": 5
  },
  "constantia": {
   "name": "Constantia",
